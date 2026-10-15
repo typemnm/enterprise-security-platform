@@ -1,5 +1,7 @@
 # Enterprise Security Platform
 
+[![CI](https://github.com/typemnm/enterprise-security-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/typemnm/enterprise-security-platform/actions/workflows/ci.yml)
+
 기업의 AWS 계정에 직접 설치하는 HTTP 서비스 보안 플랫폼입니다. 보호할 서비스 ARN을 미리 입력하지 않고, 설정한 리전의 **공개 ALB와 활성 CloudFront**를 발견해 WAF·보안 로그·HOTL/HITL·관리자 대시보드·Slack 알림을 연결합니다. 업무 애플리케이션이나 취약 실습 웹사이트는 배포하지 않습니다.
 
 기본은 태그를 통한 선택, `observe`, `dry_run=true`입니다. 운영자가 범위와 정책을 검토한 뒤 실제 대응을 활성화합니다. 관찰 모드에서도 최초 WAF 연결·규칙·로그 설정은 변경될 수 있으므로, 먼저 검증 설치와 실제 후보 조회를 수행합니다.

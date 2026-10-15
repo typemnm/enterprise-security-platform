@@ -10,7 +10,13 @@
 
 ## 실제 배포 검증
 
-이 문서 작성 시 v0.1.0 공개 제품에 대응하는 실제 reference 배포의 최종 수락 검사 결과는 확인 전입니다. 이전 실습 또는 다른 릴리스의 배포 결과를 이 릴리스의 완료 증거로 사용하지 않습니다.
+2026-10-15에 공개 제품 릴리스 `a7ab77f2a0f023bb886d918eb0bc359314387cb2a43a6f0afc01338415109aec`를 외부 계정 설정으로 실제 참조 환경에 적용했습니다. 서울 제어 영역·governance와 `us-east-1` 수집 영역의 CloudFormation 스택 3개가 완료됐고, 설치 도구가 배포 함수 코드 해시·Cognito MFA/관리자 전용 설정·HTTPS health를 확인했습니다.
+
+일반 `--apply`로 자동 발견을 활성화했으며, `tagged`·`observe`·`dry_run=true`를 확인했습니다. 선택 태그가 붙은 지원 서비스는 0개여서 결과는 `DEPLOYED_NO_ELIGIBLE_RESOURCES`입니다. 업무 애플리케이션 생성·취약 실습 서비스 연결·실제 IP 차단은 수행하지 않았습니다. 이 결과는 플랫폼 설치 완료이며 기업 서비스 보호 인수 완료는 아닙니다.
+
+HTTPS 경계 검사 9개가 통과했습니다. health, 로그인 필요 페이지, 세션·검토·승인·반려·차단·롤백 API의 미인증 거절, Cognito Authorization Code + PKCE와 Secure/HttpOnly cookie를 확인했습니다. 실제 관리자 초대·사람의 MFA 로그인·기업 Slack 수신·업무 WAF 차단/롤백은 회사 인수 항목입니다. 기본 관리자 이메일이나 Slack 계정은 연결하지 않습니다.
+
+GitHub CI에서도 전체 소스 시험·CloudFormation 검사·배포 패키징·최종 공개 ZIP 검사가 통과했습니다. ZIP을 별도 경로로 추출한 독립 검사에서 아티팩트·소스·템플릿·Python SDK·Node 의존성 해시를 검증하고 설치 계획을 실행했습니다. 이 설치 계획 검사에서는 AWS·네트워크·Node/npm을 호출하지 않았습니다. 회사 설정과 원본 배포 결과는 공개 저장소와 배포 ZIP에 포함하지 않습니다.
 
 회사는 [빠른 설치](quickstart.md)의 `--validation-only`와 [운영 검증](operations.md)을 수행하고 결과를 외부 회사 디렉터리나 비공개 증거 저장소에 보관합니다. `VALIDATED_AUTOMATIC_ONBOARDING_DISABLED`는 플랫폼 설치·연결 검증 상태이며, 업무 서비스의 WAF 연결이나 운영 인수 완료를 뜻하지 않습니다.
 
