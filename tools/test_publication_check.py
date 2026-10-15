@@ -79,6 +79,39 @@ class PublicationTests(unittest.TestCase):
         self.assertTrue(allowed_source("service-onboarding/installation.example.json"))
         for name in ("installation.json", ".env", "config/company.json", "build/install-result.json", "dashboard/node_modules/a/index.js", "../runtime.py"):
             self.assertFalse(allowed_source(name))
+    def test_terraform_source_modules_tests_and_reviewed_lock_are_publishable(self):
+        names = ["terraform/main.tf", "terraform/versions.tf", "terraform/.terraform.lock.hcl",
+                 "terraform/modules/foundation/main.tf.json", "terraform/tests/defaults.tftest.hcl", "terraform/README.md",
+                 "terraform/resource-map.json"]
+        for name in names:
+            with self.subTest(name=name):
+                self.assertTrue(allowed_source(name))
+                self.assertEqual(archive_findings(archive({"enterprise-security-platform/" + name: "neutral"})), [])
+    def test_terraform_company_state_plans_backend_and_overrides_are_never_uploaded(self):
+        private = ["terraform.tfstate", "terraform.tfstate.backup", "terraform.tfstate.2026.backup",
+                   "company.tfvars", "company.auto.tfvars.json", "company.tfvars.example",
+                   "tfplan", "tfplan.json", "plan.json", "release.tfplan", "release.tfplan.json",
+                   "release.plan", "release.plan.json", "backend.hcl", "backend.prod.hcl",
+                   "backend-prod.json", "prod.backend.hcl", ".terraformrc", "terraform.rc", "credentials.tfrc.json",
+                   "override.tf", "override.tf.json", "prod_override.tf", "prod_override.tf.json",
+                   ".terraform/terraform.tfstate", ".terraform/providers/provider.tf"]
+        for name in private:
+            with self.subTest(name=name):
+                path = "terraform/" + name
+                self.assertFalse(allowed_source(path))
+                findings = archive_findings(archive({"enterprise-security-platform/" + path: "private"}))
+                self.assertEqual([row["code"] for row in findings], ["UPLOAD_MEMBER_NOT_ALLOWED"])
+    def test_terraform_initialization_cache_is_skipped_in_local_inventory(self):
+        workspace = Path(__file__).resolve().parents[1] / "build/publication-tests"
+        workspace.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=workspace) as directory:
+            root = Path(directory)
+            (root / "terraform/.terraform/providers").mkdir(parents=True)
+            (root / "terraform/main.tf").write_text("neutral")
+            (root / "terraform/.terraform/providers/binary").write_bytes(b"private")
+            files, findings = source_inventory(root)
+            self.assertEqual(files, ["terraform/main.tf"])
+            self.assertEqual(findings, [])
     def test_findings_never_echo_credentials_account_email_or_endpoint(self):
         values = ["AK" + "IA" + "Z" * 16, "user@" + "customer.company", "https://private." + "internal/dashboard", "arn:aws:iam::" + "2" * 12 + ":role/Company"]
         findings = content_findings("runtime/example.py", ("\n".join(values)).encode())

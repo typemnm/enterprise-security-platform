@@ -18,18 +18,18 @@
 
 ## 시작하기
 
-사전 빌드 패키지는 [v0.1.0 GitHub Release](https://github.com/typemnm/enterprise-security-platform/releases/tag/v0.1.0)의 `enterprise-security-platform-deploy.zip`과 `enterprise-security-platform-deploy.zip.sha256`을 받습니다. [빠른 설치의 체크섬 검증](docs/quickstart.md#사전-빌드-패키지로-설치)을 거친 뒤 ZIP 안의 `enterprise-security-platform/`을 작업 디렉터리로 사용합니다.
+기본 배포 경로는 `terraform/`의 native AWS provider 리소스입니다. [GitHub Releases](https://github.com/typemnm/enterprise-security-platform/releases)에서 Terraform 소스를 포함하는 릴리스의 배포 ZIP과 SHA-256 파일을 함께 받습니다. [빠른 설치](docs/quickstart.md)의 체크섬 검증을 거친 뒤 ZIP 안의 `enterprise-security-platform/`을 작업 디렉터리로 사용합니다. 기존 v0.1.0은 Python/CloudFormation 설치 릴리스입니다.
 
-사전 빌드 설치에는 Python 3.10 이상, AWS CLI v2, `service-onboarding/requirements.txt`의 jsonschema와 회사 AWS 설치 프로필이 필요합니다. Node/npm 빌드는 필요하지 않습니다. ZIP에는 코드·문서, `build/release/`의 런타임·대시보드 ZIP과 manifest, 해당 릴리스의 테스트 결과가 포함됩니다.
+사전 빌드 Terraform 설치에는 Terraform 1.12 이상 2 미만과 회사 AWS 자격증명이 필요합니다. 검증 버전은 Terraform 1.16.3과 잠긴 AWS provider 6.69.0입니다. 기업 설치에 Python·Node/npm 빌드는 필요하지 않습니다. ZIP에는 Terraform 모듈·provider 잠금 파일, 코드·문서, `build/release/`의 런타임·대시보드 ZIP과 manifest, 해당 릴리스의 테스트 결과가 포함됩니다. AWS CLI v2는 프로필/SSO 준비와 운영 명령에 사용합니다.
 
-소스를 직접 빌드하려면 Node.js 24.x(24.11 이상)와 npm도 준비하고 저장소를 복제합니다. 모든 명령은 제품 루트에서 실행합니다.
+소스를 직접 빌드하려면 Python 3.10 이상, Node.js 24.x(24.11 이상)와 npm도 준비하고 저장소를 복제합니다. Python은 패키징과 선택 운영·검증 CLI에 사용하며 기본 인프라 배포를 실행하지 않습니다.
 
 ```powershell
 git clone https://github.com/typemnm/enterprise-security-platform.git
 Set-Location enterprise-security-platform
 ```
 
-[빠른 설치](docs/quickstart.md)에서 회사 설정을 **저장소 밖**에 만들고, 로컬 계획 → 검증 설치 → 운영 전환 순서로 진행합니다. 회사 계정·관리자 이메일·Slack 채널·Secret ARN·생성된 배포 결과를 공개 저장소에 넣지 않습니다. Token과 비밀번호는 설정 파일이나 소스에 저장하지 않습니다.
+[빠른 설치](docs/quickstart.md)에서 회사 tfvars·backend 설정·계획·출력 파일을 **저장소 밖**에 만들고, backend 초기화 → 계획 검토 → 자동 연결 비활성 배포 → 검증 → 명시적 운영 전환 순서로 진행합니다. state는 회사의 암호화·잠금·버전 관리된 S3 backend에 보관합니다. Token과 비밀번호는 소스·tfvars·Terraform state에 넣지 않습니다.
 
 | 문서 | 내용 |
 |---|---|

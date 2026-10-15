@@ -1,0 +1,136 @@
+{
+  "output": {
+    "InstallationId": {
+      "value": "${var.stack_name}"
+    },
+    "RegistryTableName": {
+      "value": "${local.name_ServiceRegistry}"
+    },
+    "RegistryTableArn": {
+      "value": "${format(\"arn:%s:dynamodb:%s:%s:table/%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_ServiceRegistry)}"
+    },
+    "LeaseTableName": {
+      "value": "${local.name_DiscoveryLeaseTable}"
+    },
+    "LeaseTableArn": {
+      "value": "${format(\"arn:%s:dynamodb:%s:%s:table/%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_DiscoveryLeaseTable)}"
+    },
+    "ExpectedActivityTableName": {
+      "value": "${local.name_ExpectedActivityTable}"
+    },
+    "ExpectedActivityTableArn": {
+      "value": "${format(\"arn:%s:dynamodb:%s:%s:table/%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_ExpectedActivityTable)}"
+    },
+    "CasesTableName": {
+      "value": "${local.name_CasesTable}"
+    },
+    "CasesTableArn": {
+      "value": "${format(\"arn:%s:dynamodb:%s:%s:table/%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_CasesTable)}"
+    },
+    "CasesTableStreamArn": {
+      "value": "${aws_dynamodb_table.CasesTable.stream_arn}"
+    },
+    "CaseStatusIndexName": {
+      "value": "${\"status-updated-at\"}"
+    },
+    "ResponseOperationsTableName": {
+      "value": "${local.name_ResponseOperationsTable}"
+    },
+    "ResponseOperationsTableArn": {
+      "value": "${format(\"arn:%s:dynamodb:%s:%s:table/%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_ResponseOperationsTable)}"
+    },
+    "PublicationReceiptsTableName": {
+      "value": "${local.name_PublicationReceiptsTable}"
+    },
+    "PublicationReceiptsTableArn": {
+      "value": "${format(\"arn:%s:dynamodb:%s:%s:table/%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_PublicationReceiptsTable)}"
+    },
+    "AuditBucketName": {
+      "value": "${aws_s3_bucket.AuditBucket.id}"
+    },
+    "AuditBucketArn": {
+      "value": "${aws_s3_bucket.AuditBucket.arn}"
+    },
+    "AuditKeyArn": {
+      "value": "${aws_kms_key.AuditKey.arn}"
+    },
+    "SecurityEventBusArn": {
+      "value": "${format(\"arn:%s:events:%s:%s:event-bus/%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_SecurityEventBus)}"
+    },
+    "SecurityEventBusName": {
+      "value": "${local.name_SecurityEventBus}"
+    },
+    "OpsTopicArn": {
+      "value": "${aws_sns_topic.OpsTopic.arn}"
+    },
+    "OpsKeyArn": {
+      "value": "${aws_kms_key.OpsKey.arn}"
+    },
+    "DiscoveryFunctionArn": {
+      "value": "${format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_DiscoveryFunction)}"
+    },
+    "DiscoveryRoleArn": {
+      "value": "${format(\"arn:%s:iam::%s:role/%s\", data.aws_partition.current.partition, var.account_id, local.name_DiscoveryRole)}"
+    },
+    "SecurityLogIngressArn": {
+      "value": "${format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_SecurityLogIngressFunction)}"
+    },
+    "SecurityLogIngressFailureQueueUrl": {
+      "value": "${aws_sqs_queue.SecurityLogIngressFailureQueue.url}"
+    },
+    "SecurityLogIngressFailureQueueArn": {
+      "value": "${aws_sqs_queue.SecurityLogIngressFailureQueue.arn}"
+    },
+    "IngressAlarmRelayFailureQueueUrl": {
+      "value": "${aws_sqs_queue.IngressAlarmRelayFailureQueue.url}"
+    },
+    "DiscoveryDlqUrl": {
+      "value": "${aws_sqs_queue.DiscoveryDlq.url}"
+    },
+    "DashboardSessionTableName": {
+      "value": "${local.name_DashboardSessionTable}"
+    },
+    "DiscoveryScheduleRuleArn": {
+      "value": "${format(\"arn:%s:events:%s:%s:rule/%s\", data.aws_partition.current.partition, var.region, var.account_id, (\"default\" == \"default\" ? local.name_DiscoverySchedule : join(\"/\", [\"default\", local.name_DiscoverySchedule])))}"
+    },
+    "DiscoveryResourceEventRuleArn": {
+      "value": "${format(\"arn:%s:events:%s:%s:rule/%s\", data.aws_partition.current.partition, var.region, var.account_id, (\"default\" == \"default\" ? local.name_DiscoveryResourceEvent : join(\"/\", [\"default\", local.name_DiscoveryResourceEvent])))}"
+    },
+    "DashboardSessionTableArn": {
+      "value": "${format(\"arn:%s:dynamodb:%s:%s:table/%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_DashboardSessionTable)}"
+    },
+    "CognitoUserPoolId": {
+      "value": "${aws_cognito_user_pool.AdminUserPool.id}"
+    },
+    "CognitoClientId": {
+      "value": "${aws_cognito_user_pool_client.AdminClient.id}"
+    },
+    "OidcIssuer": {
+      "value": "${join(\"\", [\"https://cognito-idp.\", var.region, \".\", data.aws_partition.current.dns_suffix, \"/\", aws_cognito_user_pool.AdminUserPool.id])}"
+    },
+    "DashboardRedirectUri": {
+      "value": "${join(\"\", [(local.condition_CustomDashboardOrigin ? local.parameters[\"DashboardOrigin\"] : join(\"\", [\"https://\", aws_apigatewayv2_api.DashboardHttpApi.id, \".execute-api.\", var.region, \".\", data.aws_partition.current.dns_suffix])), \"/auth/callback\"])}"
+    },
+    "AdminGroupName": {
+      "value": "${\"security-admins\"}"
+    },
+    "DashboardUrl": {
+      "value": "${(local.condition_CustomDashboardOrigin ? local.parameters[\"DashboardOrigin\"] : join(\"\", [\"https://\", aws_apigatewayv2_api.DashboardHttpApi.id, \".execute-api.\", var.region, \".\", data.aws_partition.current.dns_suffix]))}"
+    },
+    "DashboardFunctionArn": {
+      "value": "${format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_DashboardFunction)}"
+    },
+    "DashboardRoleArn": {
+      "value": "${format(\"arn:%s:iam::%s:role/%s\", data.aws_partition.current.partition, var.account_id, local.name_DashboardRole)}"
+    },
+    "DashboardReportBucketName": {
+      "value": "${aws_s3_bucket.AuditBucket.id}"
+    },
+    "DashboardReportBucketArn": {
+      "value": "${aws_s3_bucket.AuditBucket.arn}"
+    },
+    "DashboardApiId": {
+      "value": "${aws_apigatewayv2_api.DashboardHttpApi.id}"
+    }
+  }
+}

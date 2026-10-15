@@ -1,0 +1,362 @@
+{
+  "terraform": {
+    "required_providers": {
+      "aws": {
+        "source": "hashicorp/aws",
+        "version": "= 6.69.0"
+      }
+    }
+  },
+  "data": {
+    "aws_partition": {
+      "current": {}
+    }
+  },
+  "locals": {
+    "raw_parameters": "${merge({\"CodeVersion\" = \"\", \"Environment\" = \"prod\", \"LogRetentionDays\" = 90}, var.parameters)}",
+    "parameters": "${{\"CodeBucket\" = local.raw_parameters[\"CodeBucket\"], \"CodeKey\" = local.raw_parameters[\"CodeKey\"], \"RegistryTableName\" = local.raw_parameters[\"RegistryTableName\"], \"RegistryTableArn\" = local.raw_parameters[\"RegistryTableArn\"], \"ExpectedActivityTableName\" = local.raw_parameters[\"ExpectedActivityTableName\"], \"ExpectedActivityTableArn\" = local.raw_parameters[\"ExpectedActivityTableArn\"], \"CasesTableName\" = local.raw_parameters[\"CasesTableName\"], \"CasesTableArn\" = local.raw_parameters[\"CasesTableArn\"], \"SecurityEventBusArn\" = local.raw_parameters[\"SecurityEventBusArn\"], \"AuditBucketName\" = local.raw_parameters[\"AuditBucketName\"], \"AuditBucketArn\" = local.raw_parameters[\"AuditBucketArn\"], \"AuditKeyArn\" = local.raw_parameters[\"AuditKeyArn\"], \"ControlPlaneRegion\" = local.raw_parameters[\"ControlPlaneRegion\"], \"LeaseTableName\" = local.raw_parameters[\"LeaseTableName\"], \"LeaseTableArn\" = local.raw_parameters[\"LeaseTableArn\"], \"InstallationId\" = local.raw_parameters[\"InstallationId\"], \"CodeVersion\" = local.raw_parameters[\"CodeVersion\"], \"Environment\" = local.raw_parameters[\"Environment\"], \"LogRetentionDays\" = tonumber(local.raw_parameters[\"LogRetentionDays\"])}}",
+    "name_SecurityLogIngressLogs": "${lookup(var.physical_names, \"SecurityLogIngressLogs\", length(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/ingress\"])) <= 512 ? join(\"\", [\"/enterprise/security/\", var.stack_name, \"/ingress\"]) : format(\"%s-%s\", substr(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/ingress\"]), 0, 503), substr(sha256(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/ingress\"])), 0, 8)))}",
+    "name_SecurityLogIngressRole": "${lookup(var.physical_names, \"SecurityLogIngressRole\", length(join(\"-\", [var.stack_name, var.region, \"securitylogingressrole\"])) <= 64 ? join(\"-\", [var.stack_name, var.region, \"securitylogingressrole\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, var.region, \"securitylogingressrole\"]), 0, 55), substr(sha256(join(\"-\", [var.stack_name, var.region, \"securitylogingressrole\"])), 0, 8)))}",
+    "name_SecurityLogIngressFunction": "${lookup(var.physical_names, \"SecurityLogIngressFunction\", length(join(\"-\", [var.stack_name, \"securitylogingressfunction\"])) <= 64 ? join(\"-\", [var.stack_name, \"securitylogingressfunction\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, \"securitylogingressfunction\"]), 0, 55), substr(sha256(join(\"-\", [var.stack_name, \"securitylogingressfunction\"])), 0, 8)))}",
+    "name_CaseBudgetLogMetric": "${lookup(var.physical_names, \"CaseBudgetLogMetric\", length(join(\"-\", [var.stack_name, \"casebudgetlogmetric\"])) <= 512 ? join(\"-\", [var.stack_name, \"casebudgetlogmetric\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, \"casebudgetlogmetric\"]), 0, 503), substr(sha256(join(\"-\", [var.stack_name, \"casebudgetlogmetric\"])), 0, 8)))}",
+    "name_SecurityLogIngressFailureQueue": "${lookup(var.physical_names, \"SecurityLogIngressFailureQueue\", length(join(\"-\", [var.stack_name, \"securitylogingressfailurequeue\"])) <= 80 ? join(\"-\", [var.stack_name, \"securitylogingressfailurequeue\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, \"securitylogingressfailurequeue\"]), 0, 71), substr(sha256(join(\"-\", [var.stack_name, \"securitylogingressfailurequeue\"])), 0, 8)))}",
+    "name_IngressAlarmRelayFailureQueue": "${lookup(var.physical_names, \"IngressAlarmRelayFailureQueue\", length(join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-ingress-relay-failures\"])])) <= 80 ? join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-ingress-relay-failures\"])]) : format(\"%s-%s\", substr(join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-ingress-relay-failures\"])]), 0, 71), substr(sha256(join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-ingress-relay-failures\"])])), 0, 8)))}",
+    "name_IngressAlarmRelayRole": "${lookup(var.physical_names, \"IngressAlarmRelayRole\", length(join(\"-\", [var.stack_name, var.region, \"ingressalarmrelayrole\"])) <= 64 ? join(\"-\", [var.stack_name, var.region, \"ingressalarmrelayrole\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, var.region, \"ingressalarmrelayrole\"]), 0, 55), substr(sha256(join(\"-\", [var.stack_name, var.region, \"ingressalarmrelayrole\"])), 0, 8)))}",
+    "name_IngressErrorsAlarm": "${lookup(var.physical_names, \"IngressErrorsAlarm\", length(join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-log-ingress-errors\"])])) <= 255 ? join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-log-ingress-errors\"])]) : format(\"%s-%s\", substr(join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-log-ingress-errors\"])]), 0, 246), substr(sha256(join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-log-ingress-errors\"])])), 0, 8)))}",
+    "name_IngressAsyncDroppedAlarm": "${lookup(var.physical_names, \"IngressAsyncDroppedAlarm\", length(join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-log-ingress-async-dropped\"])])) <= 255 ? join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-log-ingress-async-dropped\"])]) : format(\"%s-%s\", substr(join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-log-ingress-async-dropped\"])]), 0, 246), substr(sha256(join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-log-ingress-async-dropped\"])])), 0, 8)))}",
+    "name_IngressDestinationFailuresAlarm": "${lookup(var.physical_names, \"IngressDestinationFailuresAlarm\", length(join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-log-ingress-destination-failures\"])])) <= 255 ? join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-log-ingress-destination-failures\"])]) : format(\"%s-%s\", substr(join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-log-ingress-destination-failures\"])]), 0, 246), substr(sha256(join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-log-ingress-destination-failures\"])])), 0, 8)))}",
+    "name_IngressDlqDepthAlarm": "${lookup(var.physical_names, \"IngressDlqDepthAlarm\", length(join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-log-ingress-dlq-depth\"])])) <= 255 ? join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-log-ingress-dlq-depth\"])]) : format(\"%s-%s\", substr(join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-log-ingress-dlq-depth\"])]), 0, 246), substr(sha256(join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-log-ingress-dlq-depth\"])])), 0, 8)))}",
+    "name_IngressAlarmStateChangeRelay": "${lookup(var.physical_names, \"IngressAlarmStateChangeRelay\", length(join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-ingress-relay\"])])) <= 64 ? join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-ingress-relay\"])]) : format(\"%s-%s\", substr(join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-ingress-relay\"])]), 0, 55), substr(sha256(join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-ingress-relay\"])])), 0, 8)))}",
+    "condition_VersionPinned": "${!((local.parameters[\"CodeVersion\"] == \"\"))}",
+    "environment_SecurityLogIngressFunction": "${{\"EXPECTED_ACCOUNT\" = var.account_id, \"CONTROL_PLANE_REGION\" = local.parameters[\"ControlPlaneRegion\"], \"REGISTRY_TABLE\" = local.parameters[\"RegistryTableName\"], \"EXPECTED_ACTIVITY_TABLE\" = local.parameters[\"ExpectedActivityTableName\"], \"CASES_TABLE\" = local.parameters[\"CasesTableName\"], \"ENVIRONMENT\" = local.parameters[\"Environment\"], \"INSTALLATION_ID\" = local.parameters[\"InstallationId\"], \"LEASE_TABLE\" = local.parameters[\"LeaseTableName\"], \"EVENT_BUS_ARN\" = local.parameters[\"SecurityEventBusArn\"], \"AUDIT_BUCKET\" = local.parameters[\"AuditBucketName\"]}}"
+  },
+  "resource": {
+    "aws_cloudwatch_log_group": {
+      "SecurityLogIngressLogs": {
+        "name": "${local.name_SecurityLogIngressLogs}",
+        "retention_in_days": "${local.parameters[\"LogRetentionDays\"]}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"]}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "region": "${var.region}"
+      }
+    },
+    "aws_iam_role": {
+      "SecurityLogIngressRole": {
+        "name": "${local.name_SecurityLogIngressRole}",
+        "assume_role_policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"sts:AssumeRole\", \"Principal\" = {\"Service\" = \"lambda.amazonaws.com\"}}]})}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}"
+      },
+      "IngressAlarmRelayRole": {
+        "name": "${local.name_IngressAlarmRelayRole}",
+        "assume_role_policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"sts:AssumeRole\", \"Principal\" = {\"Service\" = \"events.amazonaws.com\"}, \"Condition\" = {\"StringEquals\" = {\"aws:SourceAccount\" = var.account_id}, \"ArnEquals\" = {\"aws:SourceArn\" = join(\"\", [join(\"\", [\"arn:\", data.aws_partition.current.partition, \":events:\", var.region, \":\", var.account_id, \":rule/\"]), join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-ingress-relay\"])])])}}}]})}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}"
+      }
+    },
+    "aws_lambda_function": {
+      "SecurityLogIngressFunction": {
+        "runtime": "${\"python3.13\"}",
+        "handler": "${\"runtime.ingest.handler\"}",
+        "timeout": "${300}",
+        "memory_size": "${256}",
+        "role": "${format(\"arn:%s:iam::%s:role/%s\", data.aws_partition.current.partition, var.account_id, local.name_SecurityLogIngressRole)}",
+        "function_name": "${local.name_SecurityLogIngressFunction}",
+        "publish": true,
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "s3_bucket": "${local.parameters[\"CodeBucket\"]}",
+        "s3_key": "${local.parameters[\"CodeKey\"]}",
+        "s3_object_version": "${(local.condition_VersionPinned ? local.parameters[\"CodeVersion\"] : null)}",
+        "environment": [
+          {
+            "variables": "${local.environment_SecurityLogIngressFunction}"
+          }
+        ],
+        "lifecycle": {
+          "precondition": [
+            {
+              "condition": "${length(base64encode(jsonencode(local.environment_SecurityLogIngressFunction))) * 3 / 4 - length(regexall(\"=\", base64encode(jsonencode(local.environment_SecurityLogIngressFunction)))) <= 4096}",
+              "error_message": "Lambda UTF-8 environment JSON exceeds 4096 bytes; reduce exclusions, regions or configured names."
+            }
+          ]
+        },
+        "logging_config": [
+          {
+            "log_group": "${local.name_SecurityLogIngressLogs}",
+            "log_format": "${\"JSON\"}"
+          }
+        ],
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_cloudwatch_log_group.SecurityLogIngressLogs",
+          "aws_iam_role.SecurityLogIngressRole",
+          "aws_iam_role_policy.SecurityLogIngressFailureDeliveryPolicy",
+          "aws_iam_role_policy.SecurityLogIngressSdkPolicy"
+        ]
+      }
+    },
+    "aws_lambda_permission": {
+      "SecurityLogIngressPermission": {
+        "action": "${\"lambda:InvokeFunction\"}",
+        "function_name": "${local.name_SecurityLogIngressFunction}",
+        "principal": "${\"logs.amazonaws.com\"}",
+        "source_account": "${var.account_id}",
+        "source_arn": "${join(\"\", [\"arn:\", data.aws_partition.current.partition, \":logs:\", var.region, \":\", var.account_id, \":log-group:aws-waf-logs-*\"])}",
+        "statement_id": "${lookup(var.physical_names, \"SecurityLogIngressPermission\", \"SecurityLogIngressPermission\")}",
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_lambda_function.SecurityLogIngressFunction"
+        ]
+      }
+    },
+    "aws_cloudwatch_log_metric_filter": {
+      "CaseBudgetLogMetric": {
+        "pattern": "${\"{ $.budget_limited > 0 && $.installation_id = * && $.environment = * }\"}",
+        "log_group_name": "${local.name_SecurityLogIngressLogs}",
+        "name": "${local.name_CaseBudgetLogMetric}",
+        "metric_transformation": [
+          {
+            "name": "${\"CaseBudgetLimitedLog\"}",
+            "namespace": "${\"EnterpriseSecurity/Operations\"}",
+            "value": "${\"$.budget_limited\"}",
+            "unit": "${\"Count\"}",
+            "dimensions": "${{\"InstallationId\" = \"$.installation_id\", \"Environment\" = \"$.environment\"}}"
+          }
+        ],
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_cloudwatch_log_group.SecurityLogIngressLogs"
+        ]
+      }
+    },
+    "aws_iam_role_policy": {
+      "SecurityLogIngressSdkPolicy": {
+        "name": "${\"VerifiedLogIngressSdk\"}",
+        "role": "${local.name_SecurityLogIngressRole}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = [\"logs:CreateLogStream\", \"logs:PutLogEvents\"], \"Resource\" = join(\"\", [format(\"arn:%s:logs:%s:%s:log-group:%s:*\", data.aws_partition.current.partition, var.region, var.account_id, local.name_SecurityLogIngressLogs), \":*\"]), \"Condition\" = {\"ArnEquals\" = {\"lambda:SourceFunctionArn\" = format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_SecurityLogIngressFunction)}}}, {\"Effect\" = \"Allow\", \"Action\" = \"dynamodb:GetItem\", \"Resource\" = [local.parameters[\"RegistryTableArn\"], local.parameters[\"ExpectedActivityTableArn\"]], \"Condition\" = {\"ArnEquals\" = {\"lambda:SourceFunctionArn\" = format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_SecurityLogIngressFunction)}}}, {\"Effect\" = \"Allow\", \"Action\" = \"dynamodb:Query\", \"Resource\" = join(\"\", [local.parameters[\"RegistryTableArn\"], \"/index/WebAclArnIndex\"]), \"Condition\" = {\"ArnEquals\" = {\"lambda:SourceFunctionArn\" = format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_SecurityLogIngressFunction)}}}, {\"Effect\" = \"Allow\", \"Action\" = [\"dynamodb:GetItem\", \"dynamodb:BatchGetItem\", \"dynamodb:PutItem\", \"dynamodb:UpdateItem\"], \"Resource\" = local.parameters[\"LeaseTableArn\"], \"Condition\" = {\"ArnEquals\" = {\"lambda:SourceFunctionArn\" = format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_SecurityLogIngressFunction)}}}, {\"Effect\" = \"Allow\", \"Action\" = [\"dynamodb:GetItem\", \"dynamodb:PutItem\", \"dynamodb:UpdateItem\"], \"Resource\" = local.parameters[\"CasesTableArn\"], \"Condition\" = {\"ArnEquals\" = {\"lambda:SourceFunctionArn\" = format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_SecurityLogIngressFunction)}}}, {\"Effect\" = \"Allow\", \"Action\" = \"events:PutEvents\", \"Resource\" = local.parameters[\"SecurityEventBusArn\"], \"Condition\" = {\"ArnEquals\" = {\"lambda:SourceFunctionArn\" = format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_SecurityLogIngressFunction)}}}, {\"Effect\" = \"Allow\", \"Action\" = \"cloudwatch:PutMetricData\", \"Resource\" = \"*\", \"Condition\" = {\"StringEquals\" = {\"cloudwatch:namespace\" = \"EnterpriseSecurity/Operations\", \"aws:RequestedRegion\" = local.parameters[\"ControlPlaneRegion\"]}, \"ArnEquals\" = {\"lambda:SourceFunctionArn\" = format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_SecurityLogIngressFunction)}}}, {\"Effect\" = \"Allow\", \"Action\" = \"s3:PutObject\", \"Resource\" = join(\"\", [local.parameters[\"AuditBucketArn\"], \"/ingestion/*\"]), \"Condition\" = {\"ArnEquals\" = {\"lambda:SourceFunctionArn\" = format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_SecurityLogIngressFunction)}}}, {\"Effect\" = \"Allow\", \"Action\" = [\"kms:GenerateDataKey\", \"kms:Decrypt\"], \"Resource\" = local.parameters[\"AuditKeyArn\"], \"Condition\" = {\"ArnEquals\" = {\"lambda:SourceFunctionArn\" = format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_SecurityLogIngressFunction)}}}, {\"Effect\" = \"Allow\", \"Action\" = \"logs:FilterLogEvents\", \"Resource\" = join(\"\", [\"arn:\", data.aws_partition.current.partition, \":logs:\", var.region, \":\", var.account_id, \":log-group:aws-waf-logs-*\"]), \"Condition\" = {\"ArnEquals\" = {\"lambda:SourceFunctionArn\" = format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_SecurityLogIngressFunction)}}}]})}",
+        "depends_on": [
+          "aws_iam_role.SecurityLogIngressRole"
+        ]
+      },
+      "SecurityLogIngressFailureDeliveryPolicy": {
+        "name": "${\"LogIngressFailureDelivery\"}",
+        "role": "${local.name_SecurityLogIngressRole}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"sqs:SendMessage\", \"Resource\" = aws_sqs_queue.SecurityLogIngressFailureQueue.arn}]})}",
+        "depends_on": [
+          "aws_iam_role.SecurityLogIngressRole"
+        ]
+      },
+      "IngressAlarmRelayRole_Inline0": {
+        "name": "${\"OwnIngressAlarmsToCentralBus\"}",
+        "role": "${aws_iam_role.IngressAlarmRelayRole.name}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"events:PutEvents\", \"Resource\" = local.parameters[\"SecurityEventBusArn\"], \"Condition\" = {\"StringEquals\" = {\"events:source\" = \"aws.cloudwatch\", \"events:detail-type\" = \"CloudWatch Alarm State Change\", \"aws:RequestedRegion\" = local.parameters[\"ControlPlaneRegion\"]}}}]})}"
+      }
+    },
+    "aws_sqs_queue": {
+      "SecurityLogIngressFailureQueue": {
+        "message_retention_seconds": "${1209600}",
+        "max_message_size": "${1048576}",
+        "sqs_managed_sse_enabled": "${true}",
+        "name": "${local.name_SecurityLogIngressFailureQueue}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\", \"FailurePath\" = \"log-ingress-async\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "region": "${var.region}"
+      },
+      "IngressAlarmRelayFailureQueue": {
+        "kms_master_key_id": "${aws_kms_key.IngressAlarmRelayKey.arn}",
+        "message_retention_seconds": "${1209600}",
+        "max_message_size": "${1048576}",
+        "name": "${local.name_IngressAlarmRelayFailureQueue}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\", \"FailurePath\" = \"regional-alarm-relay\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "region": "${var.region}"
+      }
+    },
+    "aws_sqs_queue_policy": {
+      "SecurityLogIngressFailureQueuePolicy": {
+        "queue_url": "${aws_sqs_queue.SecurityLogIngressFailureQueue.url}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Deny\", \"Principal\" = \"*\", \"Action\" = \"sqs:*\", \"Resource\" = aws_sqs_queue.SecurityLogIngressFailureQueue.arn, \"Condition\" = {\"Bool\" = {\"aws:SecureTransport\" = \"false\"}}}]})}",
+        "region": "${var.region}"
+      },
+      "IngressAlarmRelayFailureQueuePolicy": {
+        "queue_url": "${aws_sqs_queue.IngressAlarmRelayFailureQueue.url}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Deny\", \"Principal\" = \"*\", \"Action\" = \"sqs:*\", \"Resource\" = aws_sqs_queue.IngressAlarmRelayFailureQueue.arn, \"Condition\" = {\"Bool\" = {\"aws:SecureTransport\" = \"false\"}}}, {\"Effect\" = \"Allow\", \"Action\" = \"sqs:SendMessage\", \"Resource\" = aws_sqs_queue.IngressAlarmRelayFailureQueue.arn, \"Principal\" = {\"Service\" = \"events.amazonaws.com\"}, \"Condition\" = {\"StringEquals\" = {\"aws:SourceAccount\" = var.account_id}, \"ArnEquals\" = {\"aws:SourceArn\" = join(\"\", [join(\"\", [\"arn:\", data.aws_partition.current.partition, \":events:\", var.region, \":\", var.account_id, \":rule/\"]), join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-ingress-relay\"])])])}}}]})}",
+        "region": "${var.region}"
+      }
+    },
+    "aws_lambda_function_event_invoke_config": {
+      "SecurityLogIngressAsyncFailure": {
+        "function_name": "${local.name_SecurityLogIngressFunction}",
+        "qualifier": "${\"$LATEST\"}",
+        "maximum_retry_attempts": "${2}",
+        "maximum_event_age_in_seconds": "${3600}",
+        "destination_config": [
+          {
+            "on_failure": [
+              {
+                "destination": "${aws_sqs_queue.SecurityLogIngressFailureQueue.arn}"
+              }
+            ]
+          }
+        ],
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_iam_role_policy.SecurityLogIngressFailureDeliveryPolicy",
+          "aws_lambda_function.SecurityLogIngressFunction",
+          "aws_sqs_queue.SecurityLogIngressFailureQueue",
+          "aws_sqs_queue_policy.SecurityLogIngressFailureQueuePolicy"
+        ]
+      }
+    },
+    "aws_kms_key": {
+      "IngressAlarmRelayKey": {
+        "enable_key_rotation": "${true}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"kms:*\", \"Resource\" = \"*\", \"Principal\" = {\"AWS\" = join(\"\", [\"arn:\", data.aws_partition.current.partition, \":iam::\", var.account_id, \":root\"])}}, {\"Effect\" = \"Allow\", \"Action\" = [\"kms:Decrypt\", \"kms:GenerateDataKey\"], \"Resource\" = \"*\", \"Principal\" = {\"Service\" = \"events.amazonaws.com\"}, \"Condition\" = {\"StringEquals\" = {\"aws:SourceAccount\" = var.account_id}, \"ArnEquals\" = {\"aws:SourceArn\" = join(\"\", [join(\"\", [\"arn:\", data.aws_partition.current.partition, \":events:\", var.region, \":\", var.account_id, \":rule/\"]), join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-ingress-relay\"])])])}}}]})}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "region": "${var.region}",
+        "lifecycle": {
+          "prevent_destroy": true
+        }
+      }
+    },
+    "aws_cloudwatch_metric_alarm": {
+      "IngressErrorsAlarm": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"Errors\"}",
+        "namespace": "${\"AWS/Lambda\"}",
+        "period": "${60}",
+        "statistic": "${\"Sum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_name": "${local.name_IngressErrorsAlarm}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"FunctionName\" = local.name_SecurityLogIngressFunction}}",
+        "region": "${var.region}"
+      },
+      "IngressAsyncDroppedAlarm": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"AsyncEventsDropped\"}",
+        "namespace": "${\"AWS/Lambda\"}",
+        "period": "${60}",
+        "statistic": "${\"Sum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_name": "${local.name_IngressAsyncDroppedAlarm}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"FunctionName\" = local.name_SecurityLogIngressFunction}}",
+        "region": "${var.region}"
+      },
+      "IngressDestinationFailuresAlarm": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"DestinationDeliveryFailures\"}",
+        "namespace": "${\"AWS/Lambda\"}",
+        "period": "${60}",
+        "statistic": "${\"Sum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_name": "${local.name_IngressDestinationFailuresAlarm}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"FunctionName\" = local.name_SecurityLogIngressFunction}}",
+        "region": "${var.region}"
+      },
+      "IngressDlqDepthAlarm": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_name": "${local.name_IngressDlqDepthAlarm}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "metric_query": [
+          {
+            "id": "${\"depth\"}",
+            "expression": "${\"SUM(METRICS())\"}",
+            "return_data": "${true}"
+          },
+          {
+            "id": "${\"queue0\"}",
+            "return_data": "${false}",
+            "metric": [
+              {
+                "period": "${60}",
+                "stat": "${\"Maximum\"}",
+                "namespace": "${\"AWS/SQS\"}",
+                "metric_name": "${\"ApproximateNumberOfMessagesVisible\"}",
+                "dimensions": "${{\"QueueName\" = local.name_SecurityLogIngressFailureQueue}}"
+              }
+            ]
+          },
+          {
+            "id": "${\"queue1\"}",
+            "return_data": "${false}",
+            "metric": [
+              {
+                "period": "${60}",
+                "stat": "${\"Maximum\"}",
+                "namespace": "${\"AWS/SQS\"}",
+                "metric_name": "${\"ApproximateNumberOfMessagesVisible\"}",
+                "dimensions": "${{\"QueueName\" = local.name_IngressAlarmRelayFailureQueue}}"
+              }
+            ]
+          },
+          {
+            "id": "${\"relay0\"}",
+            "return_data": "${false}",
+            "metric": [
+              {
+                "period": "${60}",
+                "stat": "${\"Sum\"}",
+                "namespace": "${\"AWS/Events\"}",
+                "metric_name": "${\"FailedInvocations\"}",
+                "dimensions": "${{\"RuleName\" = join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-ingress-relay\"])])}}"
+              }
+            ]
+          },
+          {
+            "id": "${\"relay1\"}",
+            "return_data": "${false}",
+            "metric": [
+              {
+                "period": "${60}",
+                "stat": "${\"Sum\"}",
+                "namespace": "${\"AWS/Events\"}",
+                "metric_name": "${\"InvocationsFailedToBeSentToDlq\"}",
+                "dimensions": "${{\"RuleName\" = join(\"\", [local.parameters[\"InstallationId\"], join(\"\", [\"-\", var.region, \"-ingress-relay\"])])}}"
+              }
+            ]
+          }
+        ],
+        "region": "${var.region}"
+      }
+    },
+    "aws_cloudwatch_event_rule": {
+      "IngressAlarmStateChangeRelay": {
+        "state": "${\"ENABLED\"}",
+        "name": "${local.name_IngressAlarmStateChangeRelay}",
+        "event_pattern": "${jsonencode({\"source\" = [\"aws.cloudwatch\"], \"detail-type\" = [\"CloudWatch Alarm State Change\"], \"account\" = [var.account_id], \"region\" = [var.region], \"detail\" = {\"alarmName\" = [local.name_IngressErrorsAlarm, local.name_IngressAsyncDroppedAlarm, local.name_IngressDestinationFailuresAlarm, local.name_IngressDlqDepthAlarm], \"state\" = {\"value\" = [\"ALARM\", \"OK\", \"INSUFFICIENT_DATA\"]}}})}",
+        "region": "${var.region}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "depends_on": [
+          "aws_sqs_queue_policy.IngressAlarmRelayFailureQueuePolicy"
+        ]
+      }
+    },
+    "aws_cloudwatch_event_target": {
+      "IngressAlarmStateChangeRelay_Target0": {
+        "target_id": "${\"CentralOperations\"}",
+        "arn": "${local.parameters[\"SecurityEventBusArn\"]}",
+        "role_arn": "${format(\"arn:%s:iam::%s:role/%s\", data.aws_partition.current.partition, var.account_id, local.name_IngressAlarmRelayRole)}",
+        "rule": "${aws_cloudwatch_event_rule.IngressAlarmStateChangeRelay.name}",
+        "dead_letter_config": [
+          {
+            "arn": "${aws_sqs_queue.IngressAlarmRelayFailureQueue.arn}"
+          }
+        ],
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_cloudwatch_event_rule.IngressAlarmStateChangeRelay",
+          "aws_iam_role.IngressAlarmRelayRole",
+          "aws_sqs_queue.IngressAlarmRelayFailureQueue",
+          "aws_sqs_queue_policy.IngressAlarmRelayFailureQueuePolicy"
+        ]
+      }
+    }
+  }
+}

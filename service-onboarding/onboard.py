@@ -9,10 +9,12 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
 
 
 def safe_report(value):
@@ -98,6 +100,22 @@ def render_parameters(config, args):
     return [{"ParameterKey": k, "ParameterValue": v} for k, v in values.items()]
 
 
+def scope_values(values, field):
+    """Compare set-valued scope without accepting duplicate or unknown values."""
+    maximum = 2 if field == "AllowedActions" else 25
+    if (not isinstance(values, list) or not 1 <= len(values) <= maximum
+            or any(not isinstance(value, str) for value in values)
+            or len(set(values)) != len(values)):
+        raise ValueError("Invalid or duplicate installation " + field)
+    if field == "AllowedActions":
+        valid = set(values) <= {"monitor", "block_ip"}
+    else:
+        valid = all(re.fullmatch(r"[a-z]{2}(?:-[a-z]+)+-\d", value) for value in values)
+    if not valid:
+        raise ValueError("Invalid or duplicate installation " + field)
+    return frozenset(values)
+
+
 def discover(config, args, call=aws):
     account = call("sts", "get-caller-identity", profile=args.profile, region=args.region)["Account"]
     if config.get("account_id") and config["account_id"] != account:
@@ -106,19 +124,28 @@ def discover(config, args, call=aws):
         raise ValueError("all-supported requires --allow-all-supported; tagged is the default installation scope")
     if args.apply and args.confirm_installation_id != config["installation_id"]:
         raise ValueError("--apply requires the exact --confirm-installation-id")
-    stack = call("cloudformation", "describe-stacks", "--stack-name", config["installation_id"], profile=args.profile, region=args.region)["Stacks"][0]
-    if stack["StackStatus"] not in {"CREATE_COMPLETE", "UPDATE_COMPLETE", "UPDATE_ROLLBACK_COMPLETE"}:
-        raise ValueError("Foundation stack is not in a stable state")
-    outputs = {x["OutputKey"]: x["OutputValue"] for x in stack.get("Outputs", [])}
+    if getattr(args, "deployment_outputs", None):
+        from deployment_contract import resolve_terraform
+        deployment = resolve_terraform(args.deployment_outputs, installation_id=config["installation_id"], account_id=account,
+                                       profile=args.profile, region=args.region, call=call)
+        outputs, deployed_params = deployment.outputs, deployment.foundation_parameters
+    else:
+        stack = call("cloudformation", "describe-stacks", "--stack-name", config["installation_id"], profile=args.profile, region=args.region)["Stacks"][0]
+        if stack["StackStatus"] not in {"CREATE_COMPLETE", "UPDATE_COMPLETE", "UPDATE_ROLLBACK_COMPLETE"}:
+            raise ValueError("Foundation stack is not in a stable state")
+        outputs = {x["OutputKey"]: x["OutputValue"] for x in stack.get("Outputs", [])}
+        deployed_params = {x["ParameterKey"]: x["ParameterValue"] for x in stack.get("Parameters", [])}
     function = outputs.get("DiscoveryFunctionArn", "")
     if not re.fullmatch(r"arn:aws(?:-us-gov|-cn)?:lambda:" + re.escape(args.region) + ":" + re.escape(account) + r":function:[A-Za-z0-9_-]+", function):
         raise ValueError("Foundation discovery function must belong to the current account/region")
-    deployed_params = {x["ParameterKey"]: x["ParameterValue"] for x in stack.get("Parameters", [])}
-    expected = {"InstallationScope": config["discovery"]["scope"], "ResponseMode": config["response_mode"],
-                "Environment": config["environment"], "DiscoveryRegions": ",".join(config["discovery"]["regions"]),
-                "AllowedActions": ",".join(config["allowed_actions"])}
+    expected = {"InstallationScope": config["discovery"]["scope"], "ResponseMode": config["response_mode"], "Environment": config["environment"]}
     if any(deployed_params.get(k) != v for k, v in expected.items()):
         raise ValueError("Installation file and deployed scope differ; prepare a reviewed foundation update first")
+    for field, configured in (("DiscoveryRegions", config["discovery"]["regions"]), ("AllowedActions", config["allowed_actions"])):
+        deployed = deployed_params.get(field)
+        actual = scope_values(deployed.split(",") if isinstance(deployed, str) else None, field)
+        if actual != scope_values(configured, field):
+            raise ValueError("Installation file and deployed scope differ; prepare a reviewed foundation update first")
     payload = {"operation": "reconcile" if args.apply else "discover"}
     with tempfile.TemporaryDirectory(prefix="enterprise-discovery-") as directory:
         request = Path(directory) / "request.json"
@@ -147,6 +174,7 @@ def main():
     parser.add_argument("--allow-all-supported", action="store_true")
     parser.add_argument("--profile", default="default")
     parser.add_argument("--region", default="ap-northeast-2")
+    parser.add_argument("--deployment-outputs", type=Path, help="External file produced by terraform output -json; verified against live AWS ownership")
     parser.add_argument("--code-bucket")
     parser.add_argument("--code-key")
     parser.add_argument("--code-version")

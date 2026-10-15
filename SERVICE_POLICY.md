@@ -1,8 +1,8 @@
 # 서비스별 HOTL/HITL 운영 정책
 
-설치 후 `service-onboarding/onboard.py --discover` 또는 관리자 대시보드에서 실제 등록된 `service_id`를 확인합니다. 이 CLI는 서비스 ARN, IPSet, 계정, 격리 대상, 로그 목적지 등의 입력을 받지 않습니다. 이미 등록된 활성 서비스의 정책만 변경합니다. 설치·조회 명령은 [빠른 설치](docs/quickstart.md), 회사 설정과 Slack은 [구성](docs/configuration.md), enforce 전 IAM 인수는 [보안 경계](docs/security-boundaries.md)를 따릅니다.
+Terraform 설치 후 외부 `terraform output -json deployment` 파일을 `--deployment-outputs`로 전달해 발견하거나 관리자 대시보드에서 등록된 `service_id`를 확인합니다. 이 CLI는 서비스 ARN, IPSet, 계정, 격리 대상, 로그 목적지 등의 입력을 받지 않습니다. 이미 등록된 활성 서비스의 정책만 변경합니다. 설치·조회 명령은 [빠른 설치](docs/quickstart.md), 회사 설정과 Slack은 [구성](docs/configuration.md), enforce 전 IAM 인수는 [보안 경계](docs/security-boundaries.md)를 따릅니다.
 
-기업 운영자는 AWS CLI v2와 릴리스의 Python 의존성을 준비합니다. `--plan`은 표준 Python만으로 실행되며 AWS 연결이 필요 없습니다. `--apply`는 pinned boto3 자료형을 사용하므로 `tests/requirements.txt`의 의존성이 필요합니다. 운영 프로필에는 해당 foundation의 `cloudformation:DescribeStacks`, 등록부 테이블의 `dynamodb:GetItem`/`dynamodb:UpdateItem` 권한이 있어야 합니다.
+이 선택 운영 CLI의 사용자는 AWS CLI v2와 릴리스의 Python 의존성을 준비합니다. 기본 Terraform 설치에는 Python이 필요하지 않습니다. 정책 CLI의 `--plan`은 표준 Python만으로 실행되며 AWS 연결이 필요 없습니다. `--apply`는 pinned boto3 자료형을 사용하므로 `tests/requirements.txt`의 의존성이 필요합니다. 운영 프로필에는 실제 배포 리소스의 소유권·설정 조회와 해당 등록부의 `dynamodb:GetItem`/`dynamodb:UpdateItem` 권한이 있어야 합니다. legacy CFN 경로는 해당 foundation의 `cloudformation:DescribeStacks`도 필요합니다.
 
 아래 파일을 저장소 밖 회사 설정 디렉터리의 `service-policy.json`으로 저장하고 `service_id`를 실제 발견된 값으로 바꿉니다. 자동 차단과 승인 후 수동 차단을 모두 끄는 관찰 설정입니다. 회사의 실제 WAF 규칙을 확인하기 전까지 자동 정책은 비활성 상태로 둡니다. 정책·실제 CIDR·그룹과 적용 결과를 공개 저장소에 커밋하지 않습니다.
 
@@ -24,16 +24,17 @@ $ServicePolicy = Join-Path $CompanyConfigDirectory 'service-policy.json'
 $CompanyProfile = 'company'
 $ControlRegion = 'ap-northeast-2'
 $InstallationId = '<INSTALLATION_ID>'
+$DeploymentOutputs = Join-Path $CompanyConfigDirectory 'deployment-outputs.json'
 python .\service-onboarding\policy.py --plan --config $ServicePolicy
 ```
 
 정책을 반영할 때 실제 설치 ID, AWS 프로필, control-plane 리전을 명시합니다.
 
 ```powershell
-python .\service-onboarding\policy.py --apply --installation-id $InstallationId --profile $CompanyProfile --region $ControlRegion --config $ServicePolicy
+python .\service-onboarding\policy.py --apply --installation-id $InstallationId --profile $CompanyProfile --region $ControlRegion --deployment-outputs $DeploymentOutputs --config $ServicePolicy
 ```
 
-HITL 승인 후 실제 IP 차단을 허용하려면 서비스의 `response_mode=enforce`, `manual_block_enabled=true` 및 설치 수준의 `--enable-enforcement`를 모두 적용해야 합니다. `observe` 서비스 또는 설치의 `DefaultDryRun=true`에서 생성한 사건은 승인을 받아도 dry run으로 유지됩니다. 정책을 바꾼 뒤 생성된 새 사건에서 승인·결과를 인수합니다. 허용 행동, 회사 관리자 권한, 사건의 source IP 및 승인 commit 검증도 함께 적용됩니다. 신규 설치의 별도 수동 차단 endpoint는 비활성이므로 승인된 상태 머신 흐름을 사용합니다.
+HITL 승인 후 실제 IP 차단을 허용하려면 서비스의 `response_mode=enforce`, `manual_block_enabled=true`와 Terraform 설치의 `default_dry_run=false`, `acknowledge_enforcement=true`를 검토해 적용해야 합니다. `observe` 서비스 또는 설치의 dry run에서 생성한 사건은 승인을 받아도 dry run으로 유지됩니다. 정책을 바꾼 뒤 생성된 새 사건에서 승인·결과를 인수합니다. 허용 행동, 회사 관리자 권한, 사건의 source IP 및 승인 commit 검증도 함께 적용됩니다. 신규 설치의 별도 수동 차단 endpoint는 비활성이므로 승인된 상태 머신 흐름을 사용합니다. legacy 설치기만 `--enable-enforcement`로 설치 허용을 설정합니다.
 
 기존 차단 롤백은 관리자 정정 작업이므로 서비스가 `observe`로 돌아간 후에도 허용됩니다. UI 롤백은 사건에 연결된 영구 WAF IPSet의 해당 `/32` 또는 `/128`만 제거하며 다른 주소는 유지합니다. 관찰 모드로 전환하는 것만으로 기존 차단이 해제되지는 않습니다.
 
@@ -48,7 +49,7 @@ HOTL 자동 차단을 허용하려면 다음 필드를 회사 검토를 거쳐 �
 | `auto_block_policy.window_seconds` | 60~3600초 |
 | `auto_block_policy.min_requests` | 같은 서비스·IP·규칙·정책 revision에서 고유 요청 2~10000개 |
 
-규칙 ID는 AWS WAF의 `terminatingRuleId`, `nonTerminatingMatchingRules[].ruleId` 및 rule group의 해당 rule ID에서 확인합니다. 실제 회사의 트래픽으로 오탐을 검토한 규칙만 선택합니다. 와일드카드, 임의 ARN, CloudTrail/GuardDuty 기반 자동 차단 정책은 이 CLI에서 지원하지 않습니다. 설치가 `DefaultDryRun=true`로 유지되어 있다면 정책을 `enforce`로 바꾸어도 실제 자동 차단이 실행되지 않습니다. 설치 JSON의 `response_mode=enforce`와 `install.py --apply --enable-enforcement`를 검토한 후, 서비스 정책을 아래 CLI로 적용하고 해당 정책 이후 새 사건의 결과를 확인합니다. 이미 등록된 서비스 정책은 주기적 발견에서 보존되므로 설치 JSON 변경만으로 개별 서비스 정책이 바뀌지는 않습니다.
+규칙 ID는 AWS WAF의 `terminatingRuleId`, `nonTerminatingMatchingRules[].ruleId` 및 rule group의 해당 rule ID에서 확인합니다. 실제 회사의 트래픽으로 오탐을 검토한 규칙만 선택합니다. 와일드카드, 임의 ARN, CloudTrail/GuardDuty 기반 자동 차단 정책은 이 CLI에서 지원하지 않습니다. 설치가 dry run이면 서비스 정책을 enforce로 바꾸어도 실제 자동 차단이 실행되지 않습니다. 외부 Terraform 변수의 `response_mode="enforce"`, `default_dry_run=false`, `acknowledge_enforcement=true`를 계획·적용한 후 서비스 정책을 아래 CLI로 반영하고 그 이후 새 사건의 결과를 확인합니다. 이미 등록된 서비스 정책은 주기적 발견에서 보존되므로 설치 변수만으로 개별 서비스 정책이 바뀌지는 않습니다.
 
 명시한 자동 정책에 일치하는 요청은 임계치에 도달하기 전까지 사건을 만들지 않고 원본 CloudWatch WAF 로그의 관측으로 남습니다. 카운터는 재전송 및 겹치는 배치의 동일 provider event를 제외하고 서비스·IP·규칙·정책 revision별 고유 요청만 셉니다. 관측 시각을 기준으로 `window_seconds` 크기의 고정 구간(tumbling window)을 사용하므로, 두 구간에 걸친 요청 수는 합산하지 않습니다. 여러 검토된 규칙이 동시에 일치하면 규칙별로 카운터를 유지합니다. 임계치에 도달한 각 구간·IP·규칙·revision은 안정된 집계 ID로 사건 하나를 만들며, 이후 중복 전달과 재시도는 최초 예약한 요약과 증거를 그대로 사용합니다. 오래되거나 미래인 관측으로 새 자동 차단 증거를 만들지 않습니다.
 
@@ -65,7 +66,7 @@ CloudWatch 저장 검증은 로그 작성자의 신뢰를 대신하지 않습니
 `enforce` 설정은 추가 플래그가 필요합니다.
 
 ```powershell
-python .\service-onboarding\policy.py --apply --enable-enforcement --installation-id $InstallationId --profile $CompanyProfile --region $ControlRegion --config $ServicePolicy
+python .\service-onboarding\policy.py --apply --enable-enforcement --installation-id $InstallationId --profile $CompanyProfile --region $ControlRegion --deployment-outputs $DeploymentOutputs --config $ServicePolicy
 ```
 
 `protected_cidrs`에는 차단에서 제외할 정렬된 IPv4/IPv6 네트워크를 넣습니다. 예를 들어 `10.0.0.0/8`, `2001:db8::/48`처럼 네트워크 주소와 prefix를 정확히 입력해야 합니다. 호스트 비트가 포함된 `10.0.0.1/24`는 거절됩니다. 회사 관리망·중요 외부 파트너 대역은 회사가 확인한 실제 값으로 설정합니다.

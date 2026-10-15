@@ -10,7 +10,7 @@ NLB/TCP·RDS·S3·Lambda·직접 노출 EC2 및 API Gateway 직접 WAF 연결은
 
 ## 기본 안전 모드
 
-기본은 `tagged`, `observe`, `DefaultDryRun=true`, 관리형 WAF 규칙 Count입니다. 관찰 모드가 최초 WAF 연결을 금지하는 것은 아닙니다. 업무 변경 없이 플랫폼을 검증하려면 `--validation-only`를 사용합니다. 설치 모드를 변경하거나 태그를 해제해도 기존 WAF 연결과 차단 IP를 자동 삭제하지 않습니다.
+기본은 `tagged`, `observe`, `default_dry_run=true`, 자동 연결 비활성, 관리형 WAF 규칙 Count입니다. 관찰 모드가 최초 WAF 연결을 금지하는 것은 아닙니다. 업무 변경 없이 플랫폼을 검증하려면 Terraform의 `automatic_onboarding_enabled=false`와 기본 dry run을 유지합니다(legacy 설치기는 `--validation-only`). 설치 모드를 변경하거나 태그를 해제해도 기존 WAF 연결과 차단 IP를 자동 삭제하지 않습니다.
 
 실제 차단에는 서비스 enforce·설치 실행 허용·행동 허용·신선한 저장 증거·사건 범위·정책 revision이 모두 일치해야 합니다. HITL에는 관리자 결정과 callback commit도 필요합니다. 입력의 dry-run false, 성공 문자열, 임의 ARN, AI 추천이나 재해시한 proof가 실제 대응 권한을 만들지 않습니다.
 
@@ -29,6 +29,8 @@ SDK용 `lambda:SourceFunctionArn` 조건과 backend 실패 전달·SQS poller �
 Cognito의 서명·issuer·client/audience·expiry·token type, PKCE·state·nonce와 matching subject를 검증합니다. 관리자는 MFA를 등록하며 서비스별 읽기·관리 그룹을 확인합니다. 세션은 최대 15분이고 OAuth access/refresh token을 저장하지 않습니다. 비로그인 요청은 공개 health·로그인 흐름 외에 차단하며 상태 변경은 Origin·CSRF를 검증합니다.
 
 승인 task token, 비공개 reasoning·본문·SFN 원본 입출력/Cause·Token은 public API·Slack·검증 결과에 내보내지 않습니다. 보고서와 원본 WAF 스냅샷은 회사의 비공개 KMS/S3·DynamoDB 접근 제어를 따릅니다. 스냅샷에 오리진 헤더 등 민감 설정이 들어갈 수 있으므로 회사 내부 접근도 제한합니다.
+
+Terraform state·저장 계획·출력은 회사 리소스와 보안 설정을 포함하는 비공개 자료입니다. private S3/KMS·버전·잠금과 최소 권한으로 관리하고 공개 CI artifact에 넣지 않습니다. `sensitive` 표시는 표시 제어이며 값의 state 저장을 막지 않습니다. 실제 자격증명·Slack token·비밀번호는 Terraform 리소스/data source에 입력하지 않고 런타임이 Secret ARN을 통해 읽습니다.
 
 차단 롤백은 사건의 정확한 호스트 `/32` 또는 `/128`만 제거합니다. 넓은 CIDR 전체를 해제하거나 다른 서비스·임시 IPSet을 수정하지 않습니다. 관찰 모드로 돌아온 후에도 기존 차단의 관리자 정정은 허용하지만 새 차단 허용과는 구분합니다.
 

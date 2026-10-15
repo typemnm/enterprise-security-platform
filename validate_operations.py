@@ -9,11 +9,13 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 import re
+import sys
 import time
 
 from install import cli
 
 ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT / "service-onboarding"))
 
 
 def require(condition, code):
@@ -38,14 +40,16 @@ def main():
     parser.add_argument("--profile", default="default")
     parser.add_argument("--region", default="ap-northeast-2")
     parser.add_argument("--source-region", default="us-east-1")
-    parser.add_argument("--install-result", type=Path, default=ROOT / "build/install-result.json")
+    parser.add_argument("--install-result", type=Path, help="Optional legacy receipt; Terraform outputs supply installation metadata")
+    parser.add_argument("--deployment-outputs", type=Path, help="External terraform output -json file")
     parser.add_argument("--output", type=Path, default=ROOT / "build/operations-validation-result.json")
     parser.add_argument("--timeout", type=int, default=360)
     args = parser.parse_args()
     require(60 <= args.timeout <= 600, "INVALID_VALIDATION_TIMEOUT")
     for region in (args.region, args.source_region):
         require(re.fullmatch(r"[a-z]{2}(?:-[a-z]+)+-\d", region), "INVALID_REGION")
-    install = json.loads(args.install_result.read_text(encoding="utf-8"))
+    from deployment_contract import installation_result
+    install = installation_result(args.install_result, deployment_outputs=args.deployment_outputs, legacy_path=ROOT / "build/install-result.json")
     name, account = install.get("installation_id"), install.get("account_id")
     require(isinstance(name, str) and re.fullmatch(r"[a-z][a-z0-9-]{2,30}", name), "INVALID_INSTALLATION_ID")
     require(isinstance(account, str) and re.fullmatch(r"\d{12}", account), "INVALID_ACCOUNT_ID")
@@ -69,6 +73,13 @@ def main():
                    profile=args.profile, region=region or args.region)
 
     def stack(stack_name, region):
+        if deployment:
+            require(stack_name in {name, name + "-governance", name + "-ingress"}, "EXACT_STACK_REQUIRED")
+            out = dict(deployment.outputs)
+            if region in deployment.ingress_arns:
+                out["SecurityLogIngressArn"] = deployment.ingress_arns[region]
+            params = deployment.governance_parameters if stack_name == name + "-governance" else deployment.foundation_parameters
+            return {}, out, params
         rows = aws("cloudformation", "describe-stacks", "--stack-name", stack_name, region=region).get("Stacks", [])
         require(len(rows) == 1, "EXACT_STACK_REQUIRED")
         row = rows[0]
@@ -79,14 +90,20 @@ def main():
         return row, {x["OutputKey"]: x["OutputValue"] for x in row.get("Outputs", [])}, {x["ParameterKey"]: x.get("ParameterValue") for x in row.get("Parameters", [])}
 
     def resource(stack_name, logical, region):
+        if deployment:
+            return deployment.resource(logical, scope="governance" if stack_name == name + "-governance" else "foundation", region=region)
         row = aws("cloudformation", "describe-stack-resource", "--stack-name", stack_name, "--logical-resource-id", logical, region=region)["StackResourceDetail"]
         require(row.get("StackId", "").startswith(f"arn:aws:cloudformation:{region}:{account}:stack/{stack_name}/"), "RESOURCE_SCOPE_MISMATCH")
         return row["PhysicalResourceId"]
 
-    alarm = None
+    alarm, deployment = None, None
     try:
         save()
         require(aws("sts", "get-caller-identity").get("Account") == account, "WRONG_AWS_ACCOUNT")
+        if args.deployment_outputs:
+            from deployment_contract import resolve_terraform
+            deployment = resolve_terraform(args.deployment_outputs, installation_id=name, account_id=account,
+                                           profile=args.profile, region=args.region, call=cli)
         _, foundation, fp = stack(name, args.region)
         _, governance, gp = stack(name + "-governance", args.region)
         source_stack = name if args.source_region == args.region else name + "-ingress"

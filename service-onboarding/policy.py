@@ -127,7 +127,7 @@ def _installer():
     return module
 
 
-def apply(document, *, installation_id, profile, region, enable_enforcement=False, call=None):
+def apply(document, *, installation_id, profile, region, enable_enforcement=False, call=None, deployment_outputs=None):
     document = validate(document)
     if not isinstance(installation_id, str) or not INSTALLATION.fullmatch(installation_id):
         raise PolicyError("INVALID_INSTALLATION_ID")
@@ -144,24 +144,34 @@ def apply(document, *, installation_id, profile, region, enable_enforcement=Fals
     if (not isinstance(account, str) or not re.fullmatch(r"\d{12}", account) or len(actor_parts) != 6
             or actor_parts[:2] != ["arn", "aws"] or actor_parts[2] not in {"iam", "sts"} or actor_parts[4] != account):
         raise PolicyError("UNSUPPORTED_ACCOUNT_PARTITION_REVIEW_REQUIRED")
-    stacks = invoke("cloudformation", "describe-stacks", "--stack-name", installation_id).get("Stacks", [])
-    if len(stacks) != 1:
-        raise PolicyError("FOUNDATION_OWNERSHIP_REVIEW_REQUIRED")
-    stack = stacks[0]
-    tags = {row.get("Key"): row.get("Value") for row in stack.get("Tags", [])}
-    if (tags.get("ManagedBy") != "enterprise-security" or tags.get("InstallationId") != installation_id
-            or stack.get("StackName") != installation_id
-            or not str(stack.get("StackId", "")).startswith(f"arn:aws:cloudformation:{region}:{account}:stack/{installation_id}/")):
-        raise PolicyError("FOUNDATION_OWNERSHIP_REVIEW_REQUIRED")
-    if stack.get("StackStatus") not in {"CREATE_COMPLETE", "UPDATE_COMPLETE", "UPDATE_ROLLBACK_COMPLETE"}:
-        raise PolicyError("FOUNDATION_NOT_STABLE_REVIEW_REQUIRED")
-    outputs = {row["OutputKey"]: row["OutputValue"] for row in stack.get("Outputs", [])}
+    if deployment_outputs:
+        sys.path.insert(0, str(ROOT / "service-onboarding"))
+        from deployment_contract import DeploymentError, resolve_terraform
+        try:
+            deployment = resolve_terraform(deployment_outputs, installation_id=installation_id, account_id=account,
+                                           profile=profile, region=region, call=call)
+        except DeploymentError as error:
+            raise PolicyError(str(error)) from None
+        outputs, parameters = deployment.outputs, deployment.foundation_parameters
+    else:
+        stacks = invoke("cloudformation", "describe-stacks", "--stack-name", installation_id).get("Stacks", [])
+        if len(stacks) != 1:
+            raise PolicyError("FOUNDATION_OWNERSHIP_REVIEW_REQUIRED")
+        stack = stacks[0]
+        tags = {row.get("Key"): row.get("Value") for row in stack.get("Tags", [])}
+        if (tags.get("ManagedBy") != "enterprise-security" or tags.get("InstallationId") != installation_id
+                or stack.get("StackName") != installation_id
+                or not str(stack.get("StackId", "")).startswith(f"arn:aws:cloudformation:{region}:{account}:stack/{installation_id}/")):
+            raise PolicyError("FOUNDATION_OWNERSHIP_REVIEW_REQUIRED")
+        if stack.get("StackStatus") not in {"CREATE_COMPLETE", "UPDATE_COMPLETE", "UPDATE_ROLLBACK_COMPLETE"}:
+            raise PolicyError("FOUNDATION_NOT_STABLE_REVIEW_REQUIRED")
+        outputs = {row["OutputKey"]: row["OutputValue"] for row in stack.get("Outputs", [])}
+        parameters = {row["ParameterKey"]: row["ParameterValue"] for row in stack.get("Parameters", [])}
     table, table_arn = outputs.get("RegistryTableName"), outputs.get("RegistryTableArn")
     if (outputs.get("InstallationId") != installation_id or not isinstance(table, str)
             or not re.fullmatch(r"[A-Za-z0-9_.-]{3,255}", table)
             or table_arn != f"arn:aws:dynamodb:{region}:{account}:table/{table}"):
         raise PolicyError("REGISTRY_OUTPUT_SCOPE_REVIEW_REQUIRED")
-    parameters = {row["ParameterKey"]: row["ParameterValue"] for row in stack.get("Parameters", [])}
     ceiling = parameters.get("AllowedActions", "").split(",")
     if not ceiling or len(ceiling) != len(set(ceiling)) or set(ceiling) - ACTIONS:
         raise PolicyError("INSTALLATION_ACTION_POLICY_REQUIRED")
@@ -225,6 +235,7 @@ def main(argv=None):
     parser.add_argument("--profile")
     parser.add_argument("--region")
     parser.add_argument("--enable-enforcement", action="store_true")
+    parser.add_argument("--deployment-outputs", type=Path, help="External terraform output -json file; never accepted as ownership proof by itself")
     args = parser.parse_args(argv)
     if args.apply and not all((args.installation_id, args.profile, args.region)):
         parser.error("--apply requires --installation-id, --profile and --region")
@@ -235,7 +246,7 @@ def main(argv=None):
         document = json.loads(raw.decode("utf-8-sig"), object_pairs_hook=_strict_object)
         result = (plan(document, installation_id=args.installation_id) if args.plan else
                   apply(document, installation_id=args.installation_id, profile=args.profile, region=args.region,
-                        enable_enforcement=args.enable_enforcement))
+                        enable_enforcement=args.enable_enforcement, deployment_outputs=args.deployment_outputs))
         print(json.dumps(result, ensure_ascii=False))
         return 2 if result["status"] == "REVIEW_REQUIRED" else 0
     except Exception as error:

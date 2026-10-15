@@ -1,0 +1,30 @@
+{
+  "variable": {
+    "parameters": {
+      "type": "any",
+      "description": "Reviewed CloudFormation-compatible parameter keys; this module creates native AWS resources.",
+      "validation": [
+        {
+          "condition": "${alltrue([for key in [\"AuditBucketArn\", \"AuditBucketName\", \"AuditKeyArn\", \"CasesTableArn\", \"CasesTableName\", \"CasesTableStreamArn\", \"DashboardFunctionArn\", \"DashboardRoleArn\", \"ExpectedActivityTableArn\", \"ExpectedActivityTableName\", \"IngressAlarmNames\", \"InstallationId\", \"LeaseTableArn\", \"LeaseTableName\", \"OperationsTableArn\", \"OperationsTableName\", \"OpsKeyArn\", \"OpsTopicArn\", \"ReceiptTableArn\", \"ReceiptTableName\", \"RegistryTableArn\", \"RegistryTableName\", \"RuntimeCodeBucket\", \"RuntimeCodeKey\", \"RuntimeCodeSha256\", \"RuntimeCodeVersion\", \"SecurityEventBusArn\", \"SecurityEventBusName\"] : contains(keys(var.parameters), key)])}",
+          "error_message": "Missing required platform parameters."
+        }
+      ]
+    },
+    "region": {
+      "type": "string"
+    },
+    "account_id": {
+      "type": "string"
+    },
+    "stack_name": {
+      "type": "string"
+    },
+    "installation_id": {
+      "type": "string"
+    },
+    "physical_names": {
+      "type": "map(string)",
+      "default": {}
+    }
+  }
+}

@@ -17,6 +17,16 @@ node_packaging = importlib.util.module_from_spec(node_spec)
 node_spec.loader.exec_module(node_packaging)
 
 
+def verify_terraform_sources(files, manifest):
+    names = {name for name in files if name.startswith('terraform/')}
+    recorded = {name for name in manifest.get('source_files', {}) if name.startswith('terraform/')}
+    if not names or names != recorded or 'terraform/.terraform.lock.hcl' not in names:
+        raise ValueError('TERRAFORM_SOURCE_MANIFEST_REQUIRED')
+    for name in names:
+        if hashlib.sha256(files[name].read_bytes()).hexdigest() != manifest['source_files'][name]:
+            raise ValueError('TERRAFORM_SOURCE_HASH_MISMATCH')
+
+
 def main():
     subprocess.run([sys.executable, '-B', str(ROOT / 'tools/publication_check.py'), '--root', str(ROOT)], check=True)
     manifest_path = ROOT / 'build/release/manifest.json'
@@ -25,6 +35,7 @@ def main():
         raise ValueError('VALIDATED_ACCOUNT_NEUTRAL_RELEASE_REQUIRED')
     files = {path.relative_to(ROOT).as_posix(): path for path in ROOT.rglob('*')
              if path.is_file() and not path.is_symlink() and guard.allowed_source(path.relative_to(ROOT).as_posix())}
+    verify_terraform_sources(files, manifest)
     for name in ('runtime.zip', 'dashboard.zip'):
         path = ROOT / 'build/release' / name
         if hashlib.sha256(path.read_bytes()).hexdigest() != manifest['artifacts'][name]['sha256']:

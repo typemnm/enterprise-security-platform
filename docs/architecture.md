@@ -46,7 +46,23 @@ HOTL은 검토한 자동 차단 정책, 최신 관측 저널, Tier·추천 행�
 
 롤백은 인증된 관리자가 사건의 `service_id`로 찾은 영구 IPSet에서 정확한 `/32` 또는 `/128`만 제거합니다. 클라이언트는 해제 IP·IPSet ARN·계정을 지정할 수 없습니다. 다른 주소·넓은 CIDR·임시 차단 set·응답 작업 tombstone은 보존합니다.
 
-## 배포 모듈
+## Terraform 배포 모듈
+
+기본 인프라는 Terraform의 native AWS provider 리소스입니다. `aws_cloudformation_stack`이나 apply 중 Python 설치기 실행으로 배포하지 않습니다. 개발용 `tools/terraform_codegen.py`가 검토된 모델에서 정적 `.tf.json` 모듈을 생성하며, 회사의 배포 시점에는 생성기 Python이 필요하지 않습니다.
+
+| 모듈 | 역할 |
+|---|---|
+| `terraform/` | 회사 입력·계정 guard·릴리스 아티팩트·모듈 연결·배포 출력·S3 state backend |
+| `terraform/modules/foundation/` | 비공개 데이터·키·버스·발견·Cognito·HTTPS 대시보드 |
+| `terraform/modules/ingress/` | 보호 리전과 CloudFront용 `us-east-1` 수집·실패 큐·지역 경보 |
+| `terraform/modules/governance/` | HOTL/HITL SFN·승인·대응·게시·Slack·복구·중앙 운영 경보 |
+| `terraform/bootstrap-state/` | 선택적인 회사 state용 private S3·KMS 준비 |
+
+Terraform은 제어 영역 인프라·함수 환경과 IAM 연결을 소유합니다. 실제 서비스별 WAF 규칙·IPSet 주소·ACL 연결·로그 구독·등록부 및 사건/감사 데이터는 검증된 런타임이 소유합니다. 두 주체가 동일 목록을 전체 덮어쓰지 않도록 유지합니다. 회사 설정·물리 이름 이관 자료·state·plan·배포 출력은 제품 소스와 분리합니다.
+
+첫 설치는 자동 연결 OFF·observe·dry run으로 배포하고 출력의 실제 리소스·인증·아티팩트를 인수합니다. 이후 회사가 자동 연결 변수를 명시적으로 활성화합니다. Terraform apply가 업무 reconcile이나 관리자 초대를 자동 호출하지 않으며, 즉시 재조정은 별도 운영 명령입니다.
+
+## legacy CloudFormation 모듈
 
 | 모듈 | 역할 |
 |---|---|
@@ -56,4 +72,4 @@ HOTL은 검토한 자동 차단 정책, 최신 관측 저널, Tier·추천 행�
 | `infrastructure/regional-waf.template.json` | 별도 소유 Regional WAF 모듈. 업무 ALB를 직접 생성·교체하지 않음 |
 | `infrastructure/cloudfront-waf.template.json` | `us-east-1` CloudFront WAF 모듈. 업무 Distribution을 직접 생성·교체하지 않음 |
 
-기본 설치는 foundation → 지역 수집 → governance → 정확한 승인·수집·규칙 ARN 연결 → 검증 → 자동 연결 활성화 순서입니다. 사건·감사·보고서·아티팩트는 회사 계정에 남으며, 백업·삭제 보호·보존 설정은 [운영](operations.md)에 설명합니다.
+위 템플릿과 `install.py`는 기존 설치 호환·개발 모델 검증을 위해 유지합니다. 새 Terraform 기본 경로와 한 리소스를 동시에 관리하지 않습니다. 사건·감사·보고서·아티팩트는 회사 계정에 남으며, 백업·삭제 보호·이관은 [운영](operations.md)에 설명합니다.

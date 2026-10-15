@@ -286,6 +286,30 @@ class AppliedPolicyTests(unittest.TestCase):
         self.assertEqual(self.cli.item["allowed_reader_groups"], ["auditors"])
         self.assertEqual(self.cli.item["allowed_admin_groups"], ["security-admins"])
 
+    def test_terraform_policy_apply_keeps_bindings_and_cas_without_cloudformation(self):
+        sys.path.insert(0, str(ROOT / "service-onboarding"))
+        outputs = {row["OutputKey"]: row["OutputValue"] for row in self.cli.stack["Outputs"]}
+        verified = argparse.Namespace(outputs=outputs, foundation_parameters={"AllowedActions": "monitor,block_ip"})
+        before = copy.deepcopy(self.cli.item)
+        with patch("deployment_contract.resolve_terraform", return_value=verified) as resolver:
+            result = self.apply(enable_enforcement=True, deployment_outputs="external-company-output.json")
+        self.assertEqual(result["status"], "APPLIED")
+        self.assertFalse(any(row[0][0] == "cloudformation" for row in self.cli.calls))
+        resolver.assert_called_once_with("external-company-output.json", installation_id=INSTALLATION, account_id=ACCOUNT,
+                                         profile="company", region=REGION, call=self.cli)
+        self.assertIn("#revision = :old", self.cli.updates[0]["ConditionExpression"])
+        for field in set(before) - policy.POLICY_FIELDS - {"revision"}:
+            self.assertEqual(self.cli.item[field], before[field])
+
+    def test_unverified_terraform_deployment_never_reads_or_writes_registry(self):
+        sys.path.insert(0, str(ROOT / "service-onboarding"))
+        from deployment_contract import DeploymentError
+        with patch("deployment_contract.resolve_terraform", side_effect=DeploymentError("DEPLOYMENT_RESOURCE_OWNERSHIP_MISMATCH")):
+            with self.assertRaisesRegex(policy.PolicyError, "OWNERSHIP_MISMATCH"):
+                self.apply(enable_enforcement=True, deployment_outputs="external-company-output.json")
+        self.assertEqual(self.cli.updates, [])
+        self.assertEqual([row[0][:2] for row in self.cli.calls], [("sts", "get-caller-identity")])
+
 
 if __name__ == "__main__":
     unittest.main()

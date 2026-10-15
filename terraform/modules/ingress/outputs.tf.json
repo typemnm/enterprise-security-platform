@@ -1,0 +1,16 @@
+{
+  "output": {
+    "SecurityLogIngressArn": {
+      "value": "${format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_SecurityLogIngressFunction)}"
+    },
+    "SecurityLogIngressFailureQueueUrl": {
+      "value": "${aws_sqs_queue.SecurityLogIngressFailureQueue.url}"
+    },
+    "SecurityLogIngressFailureQueueArn": {
+      "value": "${aws_sqs_queue.SecurityLogIngressFailureQueue.arn}"
+    },
+    "IngressAlarmRelayFailureQueueUrl": {
+      "value": "${aws_sqs_queue.IngressAlarmRelayFailureQueue.url}"
+    }
+  }
+}
