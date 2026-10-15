@@ -12,6 +12,7 @@ import gzip
 import json
 from pathlib import Path
 import re
+import sys
 import tempfile
 import time
 import uuid
@@ -19,6 +20,7 @@ import uuid
 from install import AwsError, cli
 
 ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT / "service-onboarding"))
 STABLE = {"CREATE_COMPLETE", "UPDATE_COMPLETE"}
 FINAL = {"AUTO_DRY_RUN", "REJECTED", "NO_ACTION"}
 STATE_FINAL = {"SUCCEEDED", "FAILED", "TIMED_OUT", "ABORTED"}
@@ -79,7 +81,7 @@ def parameters(stack):
 
 class CloudValidation:
     def __init__(self, installation, *, profile, region, destination, timeout=600, call=cli,
-                 run_id=None, clock=time.time, monotonic=time.monotonic, sleep=time.sleep):
+                 run_id=None, clock=time.time, monotonic=time.monotonic, sleep=time.sleep, deployment_outputs=None):
         require(installation.get("status") == "VALIDATED_AUTOMATIC_ONBOARDING_DISABLED" and installation.get("automatic_onboarding_enabled") is False,
                 "VALIDATION_ONLY_INSTALLATION_REQUIRED")
         require(installation.get("admin_bootstrap") == "NOT_REQUESTED", "ADMIN_INVITATION_NOT_ALLOWED")
@@ -90,6 +92,7 @@ class CloudValidation:
         require(30 <= timeout <= 1800, "TIMEOUT_MUST_BE_30_TO_1800_SECONDS")
         require(re.fullmatch(r"[a-z]{2}(?:-[a-z]+)+-\d", region), "INVALID_CONTROL_REGION")
         self.profile, self.region, self.destination, self.call = profile, region, Path(destination), call
+        self.deployment_outputs, self.deployment = deployment_outputs, None
         self.timeout, self.clock, self.monotonic, self.sleep = timeout, clock, monotonic, sleep
         self.run_id = run_id or uuid.uuid4().hex[:8]
         require(re.fullmatch(r"[a-f0-9]{8}", self.run_id), "INVALID_VALIDATION_RUN_ID")
@@ -146,8 +149,11 @@ class CloudValidation:
 
     def table(self, name, arn, logical, foundation):
         require(isinstance(name, str) and arn == f"arn:aws:dynamodb:{self.region}:{self.account}:table/{name}", "PLATFORM_TABLE_SCOPE_MISMATCH")
-        resource = self.aws("cloudformation", "describe-stack-resource", "--stack-name", self.name, "--logical-resource-id", logical).get("StackResourceDetail", {})
-        require(resource.get("PhysicalResourceId") == name and resource.get("StackId") == foundation["StackId"], "PLATFORM_TABLE_NOT_OWNED")
+        if self.deployment:
+            self.deployment.verify_table(name, arn)
+        else:
+            resource = self.aws("cloudformation", "describe-stack-resource", "--stack-name", self.name, "--logical-resource-id", logical).get("StackResourceDetail", {})
+            require(resource.get("PhysicalResourceId") == name and resource.get("StackId") == foundation["StackId"], "PLATFORM_TABLE_NOT_OWNED")
         table = self.aws("dynamodb", "describe-table", "--table-name", name, "--query", "Table.{TableArn:TableArn,TableStatus:TableStatus}")
         require(table.get("TableArn") == arn and table.get("TableStatus") == "ACTIVE", "PLATFORM_TABLE_NOT_ACTIVE")
 
@@ -155,9 +161,18 @@ class CloudValidation:
         identity = self.aws("sts", "get-caller-identity")
         require(identity.get("Account") == self.account, "WRONG_AWS_ACCOUNT")
         self.stage("ACCOUNT_MATCH_VERIFIED")
-        foundation, governance = self.stack(self.name), self.stack(self.name + "-governance")
-        self.foundation, self.governance = outputs(foundation), outputs(governance)
-        fp, gp = parameters(foundation), parameters(governance)
+        if self.deployment_outputs:
+            from deployment_contract import resolve_terraform
+            self.deployment = resolve_terraform(self.deployment_outputs, installation_id=self.name, account_id=self.account,
+                profile=self.profile, region=self.region, call=self.call)
+            foundation = {"StackName": self.name, "StackId": ""}
+            governance = {"StackName": self.name + "-governance", "StackId": ""}
+            self.foundation = self.governance = self.deployment.outputs
+            fp, gp = self.deployment.foundation_parameters, self.deployment.governance_parameters
+        else:
+            foundation, governance = self.stack(self.name), self.stack(self.name + "-governance")
+            self.foundation, self.governance = outputs(foundation), outputs(governance)
+            fp, gp = parameters(foundation), parameters(governance)
         require(fp.get("AutomaticOnboardingEnabled") == "false" and fp.get("InstallationScope") in {"tagged", "all-supported"} and fp.get("ResponseMode") == "observe", "ONBOARDING_MUST_REMAIN_DISABLED_OBSERVE")
         require(gp.get("DefaultDryRun") == "true" and gp.get("SlackSecretArn", "") == "" and gp.get("SlackChannelId", "") == "" and gp.get("ModelArn", "") == "", "GOVERNANCE_MUST_BE_DRY_RUN_WITH_NOTIFICATIONS_AND_MODEL_OFF")
         require(self.foundation.get("InstallationId") == self.name, "FOUNDATION_INSTALLATION_OUTPUT_MISMATCH")
@@ -207,6 +222,14 @@ class CloudValidation:
     def guard_ingress(self, foundation, foundation_parameters, digest):
         """Verify the owned us-east-1 provider adapter before seeding anything."""
         region = "us-east-1"
+        if self.deployment:
+            config = self.deployment.ingress_configuration(region)
+            self.ingress = self.deployment.ingress_arns[region]
+            require(config.get("CodeSha256") == digest, "INGRESS_RUNTIME_CODE_OR_STATE_MISMATCH")
+            env = config.get("Environment", {})
+            require(env.get("ENVIRONMENT") == self.environment, "INGRESS_RUNTIME_SCOPE_MISMATCH")
+            self.stage("OWNED_US_EAST_1_INGRESS_VERIFIED", code_hash_verified=True, role_owned=True)
+            return
         shard = foundation if self.region == region else self.stack(self.name + "-ingress", region=region)
         self.ingress = outputs(shard).get("SecurityLogIngressArn")
         require(isinstance(self.ingress, str) and re.fullmatch(f"arn:aws:lambda:{region}:{self.account}:function:[A-Za-z0-9_-]+", self.ingress), "VALIDATION_INGRESS_SCOPE_MISMATCH")
@@ -552,15 +575,18 @@ class CloudValidation:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--execute", action="store_true", required=True, help="Run four scoped synthetic cases, including 100-observation provider ingestion, on the validation-only platform")
-    parser.add_argument("--install-result", type=Path, default=ROOT / "build/install-result.json")
+    parser.add_argument("--install-result", type=Path, help="Optional legacy receipt; defaults to build/install-result.json only without Terraform outputs")
+    parser.add_argument("--deployment-outputs", type=Path, help="External terraform output -json file; verify live AWS resources after ownership handoff")
     parser.add_argument("--output", type=Path, default=ROOT / "build/cloud-validation-result.json")
     parser.add_argument("--profile", default="default")
     parser.add_argument("--region", default="ap-northeast-2")
     parser.add_argument("--timeout", type=int, default=600, help="Shared budget for guards and all four cases; 30..1800 seconds")
     args = parser.parse_args()
-    installation = json.loads(args.install_result.read_text(encoding="utf-8"))
+    from deployment_contract import installation_result
+    installation = installation_result(args.install_result, deployment_outputs=args.deployment_outputs, legacy_path=ROOT / "build/install-result.json")
     try:
-        result = CloudValidation(installation, profile=args.profile, region=args.region, destination=args.output, timeout=args.timeout).run()
+        result = CloudValidation(installation, profile=args.profile, region=args.region, destination=args.output, timeout=args.timeout,
+                                 deployment_outputs=args.deployment_outputs).run()
     except ValidationError:
         return 1
     print(encoded({"status": result["status"], "run_id": result["run_id"], "result_file": str(args.output.resolve())}), flush=True)

@@ -18,7 +18,7 @@ TOP_LEVEL = {"README.md", "LICENSE", "NOTICE", "SECURITY.md", "CONTRIBUTING.md",
              "CODE_OF_CONDUCT.md", "ENTERPRISE_DEPLOYMENT.md", "SERVICE_POLICY.md", ".gitignore", ".gitattributes",
              "build_release.py", "install.py", "sdk_packaging.py", "node_packaging.py", "runtime-requirements.lock.txt"}
 GENERATED = {".git", "build", "dist", "node_modules", ".venv", "venv", "__pycache__", ".pytest_cache", ".mypy_cache",
-             ".npm-cache", "coverage", "htmlcov"}
+             ".npm-cache", "coverage", "htmlcov", ".terraform"}
 PRIVATE_PARTS = {".aws", "private", "config", "configs", "company-security", "credentials", "logs", "evidence", "uploads"}
 ARTIFACT_FILES = {"build/release/runtime.zip", "build/release/dashboard.zip", "build/release/manifest.json",
                   "build/test-validation-result.json"}
@@ -66,7 +66,13 @@ def private_path(name):
     path = PurePosixPath(name)
     lower = [part.lower() for part in path.parts]
     filename = lower[-1] if lower else ""
-    return (any(part in PRIVATE_PARTS for part in lower) or filename.startswith(".env")
+    terraform_private = (".terraform" in lower or filename in {".terraformrc", "terraform.rc", "credentials.tfrc.json"}
+                         or ".tfstate" in filename or ".tfvars" in filename
+                         or filename in {"tfplan", "tfplan.json", "plan.json", "backend.hcl", "backend.json"}
+                         or filename.endswith((".tfplan", ".tfplan.json", ".plan", ".plan.json", ".backend.hcl", ".backend.json"))
+                         or filename.startswith(("backend.", "backend-")) and filename.endswith((".hcl", ".json"))
+                         or filename in {"override.tf", "override.tf.json"} or filename.endswith(("_override.tf", "_override.tf.json")))
+    return (any(part in PRIVATE_PARTS for part in lower) or filename.startswith(".env") or terraform_private
             or filename.endswith((".pem", ".key", ".p12", ".pfx", ".log", ".tfstate"))
             or "result" in filename and name not in ARTIFACT_FILES
             or filename.startswith("installation") and name != "service-onboarding/installation.example.json")
@@ -88,6 +94,9 @@ def allowed_source(name):
                 or len(path.parts) == 3 and path.parts[1] == "test" and path.suffix == ".cjs"
                 or len(path.parts) == 3 and path.parts[1] == "public" and path.suffix in {".css", ".html", ".svg"})
     if path.parts[0] == "tools": return len(path.parts) == 2 and path.suffix == ".py"
+    if path.parts[0] == "terraform":
+        return (len(path.parts) >= 2 and (path.suffix in {".tf", ".hcl"} or name.endswith(".tf.json")
+                                         or path.name == "README.md" or name == "terraform/resource-map.json"))
     if path.parts[0] == "docs": return path.suffix == ".md"
     return name == ".github/workflows/ci.yml"
 

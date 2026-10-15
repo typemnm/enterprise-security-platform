@@ -1,6 +1,6 @@
 # 기업 AWS 보안 설치 안내
 
-이 공개 저장소는 기업의 AWS 계정에서 독립적으로 빌드·설치할 수 있는 제품 코드와 문서입니다. 모든 명령의 작업 디렉터리는 저장소 루트입니다. 회사 설정·AWS 자격증명·관리자 이메일·Slack 식별자·배포 결과는 저장소 밖 또는 회사의 비공개 저장소·Secrets Manager에 보관합니다.
+이 공개 저장소는 기업의 AWS 계정에 **Terraform을 기본 경로**로 설치하는 제품 코드와 문서입니다. 사전 빌드 ZIP의 정적 Terraform 모듈과 런타임·대시보드 아티팩트를 사용하면 설치에 Python·Node/npm이 필요하지 않습니다. 회사 tfvars·backend·AWS 자격증명·관리자 이메일·Slack 식별자·계획·배포 출력은 저장소 밖에 두고 state는 회사 private S3 backend에 보관합니다.
 
 | 문서 | 내용 |
 |---|---|
@@ -14,4 +14,4 @@
 
 기본은 공개 ALB·활성 CloudFront의 태그 선택과 observe/dry run입니다. 업무 애플리케이션이나 취약 실습 웹사이트를 만들지 않습니다. 전체 AWS 서비스 보호·회사 IAM 자동 교정·CloudTrail/GuardDuty 자동 분석·일반 포렌식 생성을 완료했다고 표현하지 않습니다.
 
-먼저 `--validation-only`로 플랫폼을 검증하고 실제 후보·충돌을 확인합니다. 일반 `--apply`는 observe에서도 실제 WAF 연결·규칙·로그 설정을 변경할 수 있습니다. enforce 전 회사 IAM writer 경계·오리진·오탐·부하·관리자 로그인·Slack 수신·실제 차단과 롤백을 인수합니다.
+먼저 `automatic_onboarding_enabled=false`·observe·`default_dry_run=true`로 플랫폼을 배포하고 실제 함수·인증·후보·충돌을 확인합니다. 자동 연결을 명시적으로 활성화한 뒤에는 observe에서도 실제 WAF 연결·규칙·로그 설정이 바뀔 수 있습니다. enforce 전 회사 IAM writer 경계·오리진·오탐·부하·관리자 로그인·Slack 수신·실제 차단과 롤백을 인수합니다. 기존 Python/CloudFormation 설치는 legacy이며 [소유권 이관](docs/operations.md#기존-cloudformation-설치-이관) 전 native Terraform과 중복 관리하지 않습니다.

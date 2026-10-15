@@ -1,0 +1,64 @@
+{
+  "output": {
+    "PipelineStateMachineArn": {
+      "value": "${aws_sfn_state_machine.PipelineStateMachine.arn}"
+    },
+    "ApprovalFunctionArn": {
+      "value": "${aws_lambda_alias.ApprovalAlias.arn}"
+    },
+    "SignalIngressFunctionArn": {
+      "value": "${aws_lambda_alias.PipelineAlias.arn}"
+    },
+    "ServiceSignalRuleArn": {
+      "value": "${format(\"arn:%s:events:%s:%s:rule/%s\", data.aws_partition.current.partition, var.region, var.account_id, (local.parameters[\"SecurityEventBusName\"] == \"default\" ? local.name_ServiceSignalRule : join(\"/\", [local.parameters[\"SecurityEventBusName\"], local.name_ServiceSignalRule])))}"
+    },
+    "ReconcilerFunctionArn": {
+      "value": "${aws_lambda_alias.PublicationReconcilerAlias.arn}"
+    },
+    "NotifierFunctionArn": {
+      "value": "${aws_lambda_alias.NotifierAlias.arn}"
+    },
+    "TerminalFunctionArn": {
+      "value": "${aws_lambda_alias.TerminalAlias.arn}"
+    },
+    "OpsFunctionArn": {
+      "value": "${aws_lambda_alias.OpsAlias.arn}"
+    },
+    "BlockerFunctionArn": {
+      "value": "${aws_lambda_alias.BlockerAlias.arn}"
+    },
+    "OutboxFunctionArn": {
+      "value": "${aws_lambda_alias.OutboxAlias.arn}"
+    },
+    "ReceiptTableName": {
+      "value": "${local.parameters[\"ReceiptTableName\"]}"
+    },
+    "ReceiptTableArn": {
+      "value": "${local.parameters[\"ReceiptTableArn\"]}"
+    },
+    "NotificationQueueUrl": {
+      "value": "${aws_sqs_queue.NotificationQueue.url}"
+    },
+    "NotificationQueueArn": {
+      "value": "${aws_sqs_queue.NotificationQueue.arn}"
+    },
+    "NotificationsEnabled": {
+      "value": "${(local.condition_SlackConfigured ? \"true\" : \"false\")}"
+    },
+    "IngressOpsRuleArn": {
+      "value": "${format(\"arn:%s:events:%s:%s:rule/%s\", data.aws_partition.current.partition, var.region, var.account_id, (local.parameters[\"SecurityEventBusName\"] == \"default\" ? local.name_IngressOpsRule : join(\"/\", [local.parameters[\"SecurityEventBusName\"], local.name_IngressOpsRule])))}"
+    },
+    "IngressOpsPublisherRoleArn": {
+      "value": "${format(\"arn:%s:iam::%s:role/%s\", data.aws_partition.current.partition, var.account_id, local.name_IngressOpsPublisherRole)}"
+    },
+    "IngressOpsFailureQueueArn": {
+      "value": "${aws_sqs_queue.IngressOpsFailures.arn}"
+    },
+    "IngressOpsFailureQueueUrl": {
+      "value": "${aws_sqs_queue.IngressOpsFailures.url}"
+    },
+    "OpsEventBridgeRuleArns": {
+      "value": "${join(\",\", [format(\"arn:%s:events:%s:%s:rule/%s\", data.aws_partition.current.partition, var.region, var.account_id, (local.parameters[\"SecurityEventBusName\"] == \"default\" ? local.name_PublicationRule : join(\"/\", [local.parameters[\"SecurityEventBusName\"], local.name_PublicationRule]))), format(\"arn:%s:events:%s:%s:rule/%s\", data.aws_partition.current.partition, var.region, var.account_id, (local.parameters[\"SecurityEventBusName\"] == \"default\" ? local.name_ServiceSignalRule : join(\"/\", [local.parameters[\"SecurityEventBusName\"], local.name_ServiceSignalRule]))), format(\"arn:%s:events:%s:%s:rule/%s\", data.aws_partition.current.partition, var.region, var.account_id, (\"default\" == \"default\" ? local.name_TerminalRule : join(\"/\", [\"default\", local.name_TerminalRule]))), format(\"arn:%s:events:%s:%s:rule/%s\", data.aws_partition.current.partition, var.region, var.account_id, (\"default\" == \"default\" ? local.name_ReconcileSchedule : join(\"/\", [\"default\", local.name_ReconcileSchedule]))), format(\"arn:%s:events:%s:%s:rule/%s\", data.aws_partition.current.partition, var.region, var.account_id, (local.parameters[\"SecurityEventBusName\"] == \"default\" ? local.name_IngressOpsRule : join(\"/\", [local.parameters[\"SecurityEventBusName\"], local.name_IngressOpsRule])))])}"
+    }
+  }
+}

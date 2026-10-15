@@ -1,0 +1,1595 @@
+{
+  "terraform": {
+    "required_providers": {
+      "aws": {
+        "source": "hashicorp/aws",
+        "version": "= 6.69.0"
+      }
+    }
+  },
+  "data": {
+    "aws_partition": {
+      "current": {}
+    }
+  },
+  "locals": {
+    "raw_parameters": "${merge({\"RuntimeConfigRevision\" = \"1\", \"Environment\" = \"prod\", \"DefaultDryRun\" = \"true\", \"LogRetentionDays\" = 90, \"SlackSecretArn\" = \"\", \"SlackChannelId\" = \"\", \"SlackSecretKeyArn\" = \"\", \"ModelArn\" = \"\", \"NaclResponseEnabled\" = \"false\"}, var.parameters)}",
+    "parameters": "${{\"RuntimeCodeBucket\" = local.raw_parameters[\"RuntimeCodeBucket\"], \"RuntimeCodeKey\" = local.raw_parameters[\"RuntimeCodeKey\"], \"RuntimeCodeVersion\" = local.raw_parameters[\"RuntimeCodeVersion\"], \"RuntimeCodeSha256\" = local.raw_parameters[\"RuntimeCodeSha256\"], \"RegistryTableName\" = local.raw_parameters[\"RegistryTableName\"], \"RegistryTableArn\" = local.raw_parameters[\"RegistryTableArn\"], \"CasesTableName\" = local.raw_parameters[\"CasesTableName\"], \"CasesTableArn\" = local.raw_parameters[\"CasesTableArn\"], \"CasesTableStreamArn\" = local.raw_parameters[\"CasesTableStreamArn\"], \"OperationsTableName\" = local.raw_parameters[\"OperationsTableName\"], \"OperationsTableArn\" = local.raw_parameters[\"OperationsTableArn\"], \"LeaseTableName\" = local.raw_parameters[\"LeaseTableName\"], \"LeaseTableArn\" = local.raw_parameters[\"LeaseTableArn\"], \"ExpectedActivityTableName\" = local.raw_parameters[\"ExpectedActivityTableName\"], \"ExpectedActivityTableArn\" = local.raw_parameters[\"ExpectedActivityTableArn\"], \"ReceiptTableName\" = local.raw_parameters[\"ReceiptTableName\"], \"ReceiptTableArn\" = local.raw_parameters[\"ReceiptTableArn\"], \"AuditBucketName\" = local.raw_parameters[\"AuditBucketName\"], \"AuditBucketArn\" = local.raw_parameters[\"AuditBucketArn\"], \"AuditKeyArn\" = local.raw_parameters[\"AuditKeyArn\"], \"SecurityEventBusName\" = local.raw_parameters[\"SecurityEventBusName\"], \"SecurityEventBusArn\" = local.raw_parameters[\"SecurityEventBusArn\"], \"OpsTopicArn\" = local.raw_parameters[\"OpsTopicArn\"], \"OpsKeyArn\" = local.raw_parameters[\"OpsKeyArn\"], \"InstallationId\" = local.raw_parameters[\"InstallationId\"], \"DashboardFunctionArn\" = local.raw_parameters[\"DashboardFunctionArn\"], \"DashboardRoleArn\" = local.raw_parameters[\"DashboardRoleArn\"], \"IngressAlarmNames\" = try(tolist(local.raw_parameters[\"IngressAlarmNames\"]), split(\",\", tostring(local.raw_parameters[\"IngressAlarmNames\"]))), \"RuntimeConfigRevision\" = local.raw_parameters[\"RuntimeConfigRevision\"], \"Environment\" = local.raw_parameters[\"Environment\"], \"DefaultDryRun\" = local.raw_parameters[\"DefaultDryRun\"], \"LogRetentionDays\" = tonumber(local.raw_parameters[\"LogRetentionDays\"]), \"SlackSecretArn\" = local.raw_parameters[\"SlackSecretArn\"], \"SlackChannelId\" = local.raw_parameters[\"SlackChannelId\"], \"SlackSecretKeyArn\" = local.raw_parameters[\"SlackSecretKeyArn\"], \"ModelArn\" = local.raw_parameters[\"ModelArn\"], \"NaclResponseEnabled\" = local.raw_parameters[\"NaclResponseEnabled\"]}}",
+    "name_PipelineLogs": "${lookup(var.physical_names, \"PipelineLogs\", length(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/pipeline\"])) <= 512 ? join(\"\", [\"/enterprise/security/\", var.stack_name, \"/pipeline\"]) : format(\"%s-%s\", substr(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/pipeline\"]), 0, 503), substr(sha256(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/pipeline\"])), 0, 8)))}",
+    "name_PipelineRole": "${lookup(var.physical_names, \"PipelineRole\", length(join(\"-\", [var.stack_name, var.region, \"pipelinerole\"])) <= 64 ? join(\"-\", [var.stack_name, var.region, \"pipelinerole\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, var.region, \"pipelinerole\"]), 0, 55), substr(sha256(join(\"-\", [var.stack_name, var.region, \"pipelinerole\"])), 0, 8)))}",
+    "name_PipelineFunction": "${lookup(var.physical_names, \"PipelineFunction\", length(join(\"\", [var.stack_name, \"-pipeline\"])) <= 64 ? join(\"\", [var.stack_name, \"-pipeline\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-pipeline\"]), 0, 55), substr(sha256(join(\"\", [var.stack_name, \"-pipeline\"])), 0, 8)))}",
+    "name_ApprovalLogs": "${lookup(var.physical_names, \"ApprovalLogs\", length(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/approval\"])) <= 512 ? join(\"\", [\"/enterprise/security/\", var.stack_name, \"/approval\"]) : format(\"%s-%s\", substr(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/approval\"]), 0, 503), substr(sha256(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/approval\"])), 0, 8)))}",
+    "name_ApprovalRole": "${lookup(var.physical_names, \"ApprovalRole\", length(join(\"-\", [var.stack_name, var.region, \"approvalrole\"])) <= 64 ? join(\"-\", [var.stack_name, var.region, \"approvalrole\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, var.region, \"approvalrole\"]), 0, 55), substr(sha256(join(\"-\", [var.stack_name, var.region, \"approvalrole\"])), 0, 8)))}",
+    "name_ApprovalFunction": "${lookup(var.physical_names, \"ApprovalFunction\", length(join(\"\", [var.stack_name, \"-approval\"])) <= 64 ? join(\"\", [var.stack_name, \"-approval\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-approval\"]), 0, 55), substr(sha256(join(\"\", [var.stack_name, \"-approval\"])), 0, 8)))}",
+    "name_BlockerLogs": "${lookup(var.physical_names, \"BlockerLogs\", length(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/blocker\"])) <= 512 ? join(\"\", [\"/enterprise/security/\", var.stack_name, \"/blocker\"]) : format(\"%s-%s\", substr(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/blocker\"]), 0, 503), substr(sha256(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/blocker\"])), 0, 8)))}",
+    "name_BlockerRole": "${lookup(var.physical_names, \"BlockerRole\", length(join(\"-\", [var.stack_name, var.region, \"blockerrole\"])) <= 64 ? join(\"-\", [var.stack_name, var.region, \"blockerrole\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, var.region, \"blockerrole\"]), 0, 55), substr(sha256(join(\"-\", [var.stack_name, var.region, \"blockerrole\"])), 0, 8)))}",
+    "name_BlockerFunction": "${lookup(var.physical_names, \"BlockerFunction\", length(join(\"\", [var.stack_name, \"-blocker\"])) <= 64 ? join(\"\", [var.stack_name, \"-blocker\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-blocker\"]), 0, 55), substr(sha256(join(\"\", [var.stack_name, \"-blocker\"])), 0, 8)))}",
+    "name_TerminalLogs": "${lookup(var.physical_names, \"TerminalLogs\", length(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/terminal\"])) <= 512 ? join(\"\", [\"/enterprise/security/\", var.stack_name, \"/terminal\"]) : format(\"%s-%s\", substr(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/terminal\"]), 0, 503), substr(sha256(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/terminal\"])), 0, 8)))}",
+    "name_TerminalRole": "${lookup(var.physical_names, \"TerminalRole\", length(join(\"-\", [var.stack_name, var.region, \"terminalrole\"])) <= 64 ? join(\"-\", [var.stack_name, var.region, \"terminalrole\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, var.region, \"terminalrole\"]), 0, 55), substr(sha256(join(\"-\", [var.stack_name, var.region, \"terminalrole\"])), 0, 8)))}",
+    "name_TerminalFunction": "${lookup(var.physical_names, \"TerminalFunction\", length(join(\"\", [var.stack_name, \"-terminal\"])) <= 64 ? join(\"\", [var.stack_name, \"-terminal\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-terminal\"]), 0, 55), substr(sha256(join(\"\", [var.stack_name, \"-terminal\"])), 0, 8)))}",
+    "name_PublicationReconcilerLogs": "${lookup(var.physical_names, \"PublicationReconcilerLogs\", length(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/publicationreconciler\"])) <= 512 ? join(\"\", [\"/enterprise/security/\", var.stack_name, \"/publicationreconciler\"]) : format(\"%s-%s\", substr(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/publicationreconciler\"]), 0, 503), substr(sha256(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/publicationreconciler\"])), 0, 8)))}",
+    "name_PublicationReconcilerRole": "${lookup(var.physical_names, \"PublicationReconcilerRole\", length(join(\"-\", [var.stack_name, var.region, \"publicationreconcilerrole\"])) <= 64 ? join(\"-\", [var.stack_name, var.region, \"publicationreconcilerrole\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, var.region, \"publicationreconcilerrole\"]), 0, 55), substr(sha256(join(\"-\", [var.stack_name, var.region, \"publicationreconcilerrole\"])), 0, 8)))}",
+    "name_PublicationReconcilerFunction": "${lookup(var.physical_names, \"PublicationReconcilerFunction\", length(join(\"\", [var.stack_name, \"-publicationreconciler\"])) <= 64 ? join(\"\", [var.stack_name, \"-publicationreconciler\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-publicationreconciler\"]), 0, 55), substr(sha256(join(\"\", [var.stack_name, \"-publicationreconciler\"])), 0, 8)))}",
+    "name_OutboxLogs": "${lookup(var.physical_names, \"OutboxLogs\", length(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/outbox\"])) <= 512 ? join(\"\", [\"/enterprise/security/\", var.stack_name, \"/outbox\"]) : format(\"%s-%s\", substr(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/outbox\"]), 0, 503), substr(sha256(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/outbox\"])), 0, 8)))}",
+    "name_OutboxRole": "${lookup(var.physical_names, \"OutboxRole\", length(join(\"-\", [var.stack_name, var.region, \"outboxrole\"])) <= 64 ? join(\"-\", [var.stack_name, var.region, \"outboxrole\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, var.region, \"outboxrole\"]), 0, 55), substr(sha256(join(\"-\", [var.stack_name, var.region, \"outboxrole\"])), 0, 8)))}",
+    "name_OutboxFunction": "${lookup(var.physical_names, \"OutboxFunction\", length(join(\"\", [var.stack_name, \"-outbox\"])) <= 64 ? join(\"\", [var.stack_name, \"-outbox\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-outbox\"]), 0, 55), substr(sha256(join(\"\", [var.stack_name, \"-outbox\"])), 0, 8)))}",
+    "name_NotifierLogs": "${lookup(var.physical_names, \"NotifierLogs\", length(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/notifier\"])) <= 512 ? join(\"\", [\"/enterprise/security/\", var.stack_name, \"/notifier\"]) : format(\"%s-%s\", substr(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/notifier\"]), 0, 503), substr(sha256(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/notifier\"])), 0, 8)))}",
+    "name_NotifierRole": "${lookup(var.physical_names, \"NotifierRole\", length(join(\"-\", [var.stack_name, var.region, \"notifierrole\"])) <= 64 ? join(\"-\", [var.stack_name, var.region, \"notifierrole\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, var.region, \"notifierrole\"]), 0, 55), substr(sha256(join(\"-\", [var.stack_name, var.region, \"notifierrole\"])), 0, 8)))}",
+    "name_NotifierFunction": "${lookup(var.physical_names, \"NotifierFunction\", length(join(\"\", [var.stack_name, \"-notifier\"])) <= 64 ? join(\"\", [var.stack_name, \"-notifier\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-notifier\"]), 0, 55), substr(sha256(join(\"\", [var.stack_name, \"-notifier\"])), 0, 8)))}",
+    "name_OpsLogs": "${lookup(var.physical_names, \"OpsLogs\", length(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/ops\"])) <= 512 ? join(\"\", [\"/enterprise/security/\", var.stack_name, \"/ops\"]) : format(\"%s-%s\", substr(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/ops\"]), 0, 503), substr(sha256(join(\"\", [\"/enterprise/security/\", var.stack_name, \"/ops\"])), 0, 8)))}",
+    "name_OpsRole": "${lookup(var.physical_names, \"OpsRole\", length(join(\"-\", [var.stack_name, var.region, \"opsrole\"])) <= 64 ? join(\"-\", [var.stack_name, var.region, \"opsrole\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, var.region, \"opsrole\"]), 0, 55), substr(sha256(join(\"-\", [var.stack_name, var.region, \"opsrole\"])), 0, 8)))}",
+    "name_OpsFunction": "${lookup(var.physical_names, \"OpsFunction\", length(join(\"\", [var.stack_name, \"-ops\"])) <= 64 ? join(\"\", [var.stack_name, \"-ops\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-ops\"]), 0, 55), substr(sha256(join(\"\", [var.stack_name, \"-ops\"])), 0, 8)))}",
+    "name_WorkflowLogs": "${lookup(var.physical_names, \"WorkflowLogs\", length(join(\"\", [\"/aws/vendedlogs/states/\", var.stack_name, \"/pipeline\"])) <= 512 ? join(\"\", [\"/aws/vendedlogs/states/\", var.stack_name, \"/pipeline\"]) : format(\"%s-%s\", substr(join(\"\", [\"/aws/vendedlogs/states/\", var.stack_name, \"/pipeline\"]), 0, 503), substr(sha256(join(\"\", [\"/aws/vendedlogs/states/\", var.stack_name, \"/pipeline\"])), 0, 8)))}",
+    "name_WorkflowRole": "${lookup(var.physical_names, \"WorkflowRole\", length(join(\"-\", [var.stack_name, var.region, \"workflowrole\"])) <= 64 ? join(\"-\", [var.stack_name, var.region, \"workflowrole\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, var.region, \"workflowrole\"]), 0, 55), substr(sha256(join(\"-\", [var.stack_name, var.region, \"workflowrole\"])), 0, 8)))}",
+    "name_PipelineStateMachine": "${lookup(var.physical_names, \"PipelineStateMachine\", length(join(\"\", [var.stack_name, \"-pipeline\"])) <= 80 ? join(\"\", [var.stack_name, \"-pipeline\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-pipeline\"]), 0, 71), substr(sha256(join(\"\", [var.stack_name, \"-pipeline\"])), 0, 8)))}",
+    "name_NotificationQueue": "${lookup(var.physical_names, \"NotificationQueue\", length(join(\"-\", [var.stack_name, \"notificationqueue\"])) <= 80 ? join(\"-\", [var.stack_name, \"notificationqueue\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, \"notificationqueue\"]), 0, 71), substr(sha256(join(\"-\", [var.stack_name, \"notificationqueue\"])), 0, 8)))}",
+    "name_NotificationFailures": "${lookup(var.physical_names, \"NotificationFailures\", length(join(\"-\", [var.stack_name, \"notificationfailures\"])) <= 80 ? join(\"-\", [var.stack_name, \"notificationfailures\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, \"notificationfailures\"]), 0, 71), substr(sha256(join(\"-\", [var.stack_name, \"notificationfailures\"])), 0, 8)))}",
+    "name_IngressFailures": "${lookup(var.physical_names, \"IngressFailures\", length(join(\"-\", [var.stack_name, \"ingressfailures\"])) <= 80 ? join(\"-\", [var.stack_name, \"ingressfailures\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, \"ingressfailures\"]), 0, 71), substr(sha256(join(\"-\", [var.stack_name, \"ingressfailures\"])), 0, 8)))}",
+    "name_TerminalFailures": "${lookup(var.physical_names, \"TerminalFailures\", length(join(\"-\", [var.stack_name, \"terminalfailures\"])) <= 80 ? join(\"-\", [var.stack_name, \"terminalfailures\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, \"terminalfailures\"]), 0, 71), substr(sha256(join(\"-\", [var.stack_name, \"terminalfailures\"])), 0, 8)))}",
+    "name_StreamFailures": "${lookup(var.physical_names, \"StreamFailures\", length(join(\"-\", [var.stack_name, \"streamfailures\"])) <= 80 ? join(\"-\", [var.stack_name, \"streamfailures\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, \"streamfailures\"]), 0, 71), substr(sha256(join(\"-\", [var.stack_name, \"streamfailures\"])), 0, 8)))}",
+    "name_ServiceSignalRule": "${lookup(var.physical_names, \"ServiceSignalRule\", length(join(\"-\", [var.stack_name, \"servicesignalrule\"])) <= 64 ? join(\"-\", [var.stack_name, \"servicesignalrule\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, \"servicesignalrule\"]), 0, 55), substr(sha256(join(\"-\", [var.stack_name, \"servicesignalrule\"])), 0, 8)))}",
+    "name_TerminalRule": "${lookup(var.physical_names, \"TerminalRule\", length(join(\"-\", [var.stack_name, \"terminalrule\"])) <= 64 ? join(\"-\", [var.stack_name, \"terminalrule\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, \"terminalrule\"]), 0, 55), substr(sha256(join(\"-\", [var.stack_name, \"terminalrule\"])), 0, 8)))}",
+    "name_ReconcileSchedule": "${lookup(var.physical_names, \"ReconcileSchedule\", length(join(\"-\", [var.stack_name, \"reconcileschedule\"])) <= 64 ? join(\"-\", [var.stack_name, \"reconcileschedule\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, \"reconcileschedule\"]), 0, 55), substr(sha256(join(\"-\", [var.stack_name, \"reconcileschedule\"])), 0, 8)))}",
+    "name_PublicationRule": "${lookup(var.physical_names, \"PublicationRule\", length(join(\"-\", [var.stack_name, \"publicationrule\"])) <= 64 ? join(\"-\", [var.stack_name, \"publicationrule\"]) : format(\"%s-%s\", substr(join(\"-\", [var.stack_name, \"publicationrule\"]), 0, 55), substr(sha256(join(\"-\", [var.stack_name, \"publicationrule\"])), 0, 8)))}",
+    "name_IngressOpsPublisherRole": "${lookup(var.physical_names, \"IngressOpsPublisherRole\", length(join(\"\", [local.parameters[\"InstallationId\"], \"-ingress-ops-publisher\"])) <= 64 ? join(\"\", [local.parameters[\"InstallationId\"], \"-ingress-ops-publisher\"]) : format(\"%s-%s\", substr(join(\"\", [local.parameters[\"InstallationId\"], \"-ingress-ops-publisher\"]), 0, 55), substr(sha256(join(\"\", [local.parameters[\"InstallationId\"], \"-ingress-ops-publisher\"])), 0, 8)))}",
+    "name_IngressOpsFailures": "${lookup(var.physical_names, \"IngressOpsFailures\", length(join(\"\", [local.parameters[\"InstallationId\"], \"-ingress-ops-failures\"])) <= 80 ? join(\"\", [local.parameters[\"InstallationId\"], \"-ingress-ops-failures\"]) : format(\"%s-%s\", substr(join(\"\", [local.parameters[\"InstallationId\"], \"-ingress-ops-failures\"]), 0, 71), substr(sha256(join(\"\", [local.parameters[\"InstallationId\"], \"-ingress-ops-failures\"])), 0, 8)))}",
+    "name_IngressOpsRule": "${lookup(var.physical_names, \"IngressOpsRule\", length(join(\"\", [local.parameters[\"InstallationId\"], \"-ingress-ops\"])) <= 64 ? join(\"\", [local.parameters[\"InstallationId\"], \"-ingress-ops\"]) : format(\"%s-%s\", substr(join(\"\", [local.parameters[\"InstallationId\"], \"-ingress-ops\"]), 0, 55), substr(sha256(join(\"\", [local.parameters[\"InstallationId\"], \"-ingress-ops\"])), 0, 8)))}",
+    "name_PipelineErrors": "${lookup(var.physical_names, \"PipelineErrors\", length(join(\"\", [var.stack_name, \"-pipelineerrors\"])) <= 255 ? join(\"\", [var.stack_name, \"-pipelineerrors\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-pipelineerrors\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-pipelineerrors\"])), 0, 8)))}",
+    "name_ApprovalErrors": "${lookup(var.physical_names, \"ApprovalErrors\", length(join(\"\", [var.stack_name, \"-approvalerrors\"])) <= 255 ? join(\"\", [var.stack_name, \"-approvalerrors\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-approvalerrors\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-approvalerrors\"])), 0, 8)))}",
+    "name_BlockerErrors": "${lookup(var.physical_names, \"BlockerErrors\", length(join(\"\", [var.stack_name, \"-blockererrors\"])) <= 255 ? join(\"\", [var.stack_name, \"-blockererrors\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-blockererrors\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-blockererrors\"])), 0, 8)))}",
+    "name_TerminalErrors": "${lookup(var.physical_names, \"TerminalErrors\", length(join(\"\", [var.stack_name, \"-terminalerrors\"])) <= 255 ? join(\"\", [var.stack_name, \"-terminalerrors\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-terminalerrors\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-terminalerrors\"])), 0, 8)))}",
+    "name_PublicationReconcilerErrors": "${lookup(var.physical_names, \"PublicationReconcilerErrors\", length(join(\"\", [var.stack_name, \"-publicationreconcilererrors\"])) <= 255 ? join(\"\", [var.stack_name, \"-publicationreconcilererrors\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-publicationreconcilererrors\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-publicationreconcilererrors\"])), 0, 8)))}",
+    "name_OutboxErrors": "${lookup(var.physical_names, \"OutboxErrors\", length(join(\"\", [var.stack_name, \"-outboxerrors\"])) <= 255 ? join(\"\", [var.stack_name, \"-outboxerrors\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-outboxerrors\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-outboxerrors\"])), 0, 8)))}",
+    "name_NotifierErrors": "${lookup(var.physical_names, \"NotifierErrors\", length(join(\"\", [var.stack_name, \"-notifiererrors\"])) <= 255 ? join(\"\", [var.stack_name, \"-notifiererrors\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-notifiererrors\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-notifiererrors\"])), 0, 8)))}",
+    "name_OpsErrors": "${lookup(var.physical_names, \"OpsErrors\", length(join(\"\", [var.stack_name, \"-opserrors\"])) <= 255 ? join(\"\", [var.stack_name, \"-opserrors\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-opserrors\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-opserrors\"])), 0, 8)))}",
+    "name_NotificationQueueAge": "${lookup(var.physical_names, \"NotificationQueueAge\", length(join(\"\", [var.stack_name, \"-notificationqueueage\"])) <= 255 ? join(\"\", [var.stack_name, \"-notificationqueueage\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-notificationqueueage\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-notificationqueueage\"])), 0, 8)))}",
+    "name_NotificationFailuresMessages": "${lookup(var.physical_names, \"NotificationFailuresMessages\", length(join(\"\", [var.stack_name, \"-notificationfailuresmessages\"])) <= 255 ? join(\"\", [var.stack_name, \"-notificationfailuresmessages\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-notificationfailuresmessages\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-notificationfailuresmessages\"])), 0, 8)))}",
+    "name_IngressFailuresMessages": "${lookup(var.physical_names, \"IngressFailuresMessages\", length(join(\"\", [var.stack_name, \"-ingressfailuresmessages\"])) <= 255 ? join(\"\", [var.stack_name, \"-ingressfailuresmessages\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-ingressfailuresmessages\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-ingressfailuresmessages\"])), 0, 8)))}",
+    "name_TerminalFailuresMessages": "${lookup(var.physical_names, \"TerminalFailuresMessages\", length(join(\"\", [var.stack_name, \"-terminalfailuresmessages\"])) <= 255 ? join(\"\", [var.stack_name, \"-terminalfailuresmessages\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-terminalfailuresmessages\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-terminalfailuresmessages\"])), 0, 8)))}",
+    "name_StreamFailuresMessages": "${lookup(var.physical_names, \"StreamFailuresMessages\", length(join(\"\", [var.stack_name, \"-streamfailuresmessages\"])) <= 255 ? join(\"\", [var.stack_name, \"-streamfailuresmessages\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-streamfailuresmessages\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-streamfailuresmessages\"])), 0, 8)))}",
+    "name_ExecutionsFailed": "${lookup(var.physical_names, \"ExecutionsFailed\", length(join(\"\", [var.stack_name, \"-executionsfailed\"])) <= 255 ? join(\"\", [var.stack_name, \"-executionsfailed\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-executionsfailed\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-executionsfailed\"])), 0, 8)))}",
+    "name_ExecutionsTimedOut": "${lookup(var.physical_names, \"ExecutionsTimedOut\", length(join(\"\", [var.stack_name, \"-executionstimedout\"])) <= 255 ? join(\"\", [var.stack_name, \"-executionstimedout\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-executionstimedout\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-executionstimedout\"])), 0, 8)))}",
+    "name_ExecutionsAborted": "${lookup(var.physical_names, \"ExecutionsAborted\", length(join(\"\", [var.stack_name, \"-executionsaborted\"])) <= 255 ? join(\"\", [var.stack_name, \"-executionsaborted\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-executionsaborted\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-executionsaborted\"])), 0, 8)))}",
+    "name_RecoveryPendingExamined": "${lookup(var.physical_names, \"RecoveryPendingExamined\", length(join(\"\", [var.stack_name, \"-recoverypendingexamined\"])) <= 255 ? join(\"\", [var.stack_name, \"-recoverypendingexamined\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-recoverypendingexamined\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-recoverypendingexamined\"])), 0, 8)))}",
+    "name_RecoveryDependencyErrors": "${lookup(var.physical_names, \"RecoveryDependencyErrors\", length(join(\"\", [var.stack_name, \"-recoverydependencyerrors\"])) <= 255 ? join(\"\", [var.stack_name, \"-recoverydependencyerrors\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-recoverydependencyerrors\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-recoverydependencyerrors\"])), 0, 8)))}",
+    "name_IngressOpsDeliveryErrors": "${lookup(var.physical_names, \"IngressOpsDeliveryErrors\", length(join(\"\", [var.stack_name, \"-ingressopsdeliveryerrors\"])) <= 255 ? join(\"\", [var.stack_name, \"-ingressopsdeliveryerrors\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-ingressopsdeliveryerrors\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-ingressopsdeliveryerrors\"])), 0, 8)))}",
+    "name_IngressOpsDlqDeliveryErrors": "${lookup(var.physical_names, \"IngressOpsDlqDeliveryErrors\", length(join(\"\", [var.stack_name, \"-ingressopsdlqdeliveryerrors\"])) <= 255 ? join(\"\", [var.stack_name, \"-ingressopsdlqdeliveryerrors\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-ingressopsdlqdeliveryerrors\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-ingressopsdlqdeliveryerrors\"])), 0, 8)))}",
+    "name_PipelineAsyncDropped": "${lookup(var.physical_names, \"PipelineAsyncDropped\", length(join(\"\", [var.stack_name, \"-pipelineasyncdropped\"])) <= 255 ? join(\"\", [var.stack_name, \"-pipelineasyncdropped\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-pipelineasyncdropped\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-pipelineasyncdropped\"])), 0, 8)))}",
+    "name_PipelineDestinationFailures": "${lookup(var.physical_names, \"PipelineDestinationFailures\", length(join(\"\", [var.stack_name, \"-pipelinedestinationfailures\"])) <= 255 ? join(\"\", [var.stack_name, \"-pipelinedestinationfailures\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-pipelinedestinationfailures\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-pipelinedestinationfailures\"])), 0, 8)))}",
+    "name_TerminalAsyncDropped": "${lookup(var.physical_names, \"TerminalAsyncDropped\", length(join(\"\", [var.stack_name, \"-terminalasyncdropped\"])) <= 255 ? join(\"\", [var.stack_name, \"-terminalasyncdropped\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-terminalasyncdropped\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-terminalasyncdropped\"])), 0, 8)))}",
+    "name_TerminalDestinationFailures": "${lookup(var.physical_names, \"TerminalDestinationFailures\", length(join(\"\", [var.stack_name, \"-terminaldestinationfailures\"])) <= 255 ? join(\"\", [var.stack_name, \"-terminaldestinationfailures\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-terminaldestinationfailures\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-terminaldestinationfailures\"])), 0, 8)))}",
+    "name_PublicationReconcilerAsyncDropped": "${lookup(var.physical_names, \"PublicationReconcilerAsyncDropped\", length(join(\"\", [var.stack_name, \"-publicationreconcilerasyncdropped\"])) <= 255 ? join(\"\", [var.stack_name, \"-publicationreconcilerasyncdropped\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-publicationreconcilerasyncdropped\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-publicationreconcilerasyncdropped\"])), 0, 8)))}",
+    "name_PublicationReconcilerDestinationFailures": "${lookup(var.physical_names, \"PublicationReconcilerDestinationFailures\", length(join(\"\", [var.stack_name, \"-publicationreconcilerdestinationfailures\"])) <= 255 ? join(\"\", [var.stack_name, \"-publicationreconcilerdestinationfailures\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-publicationreconcilerdestinationfailures\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-publicationreconcilerdestinationfailures\"])), 0, 8)))}",
+    "name_IngressOpsFailureMessages": "${lookup(var.physical_names, \"IngressOpsFailureMessages\", length(join(\"\", [var.stack_name, \"-ingressopsfailuremessages\"])) <= 255 ? join(\"\", [var.stack_name, \"-ingressopsfailuremessages\"]) : format(\"%s-%s\", substr(join(\"\", [var.stack_name, \"-ingressopsfailuremessages\"]), 0, 246), substr(sha256(join(\"\", [var.stack_name, \"-ingressopsfailuremessages\"])), 0, 8)))}",
+    "condition_SlackConfigured": "${(!((local.parameters[\"SlackSecretArn\"] == \"\")) && !((local.parameters[\"SlackChannelId\"] == \"\")))}",
+    "condition_SlackCustomerKey": "${!((local.parameters[\"SlackSecretKeyArn\"] == \"\"))}",
+    "condition_ModelConfigured": "${!((local.parameters[\"ModelArn\"] == \"\"))}",
+    "condition_NaclResponse": "${(local.parameters[\"NaclResponseEnabled\"] == \"true\")}",
+    "environment_PipelineFunction": "${{\"EXPECTED_ACCOUNT\" = var.account_id, \"REGISTRY_TABLE\" = local.parameters[\"RegistryTableName\"], \"CASES_TABLE\" = local.parameters[\"CasesTableName\"], \"OPERATIONS_TABLE\" = local.parameters[\"OperationsTableName\"], \"LEASE_TABLE\" = local.parameters[\"LeaseTableName\"], \"MODEL_ARN\" = local.parameters[\"ModelArn\"], \"PIPELINE_STATE_MACHINE_ARN\" = format(\"arn:%s:states:%s:%s:stateMachine:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_PipelineStateMachine), \"DEFAULT_DRY_RUN\" = local.parameters[\"DefaultDryRun\"]}}",
+    "environment_ApprovalFunction": "${{\"EXPECTED_ACCOUNT\" = var.account_id, \"REGISTRY_TABLE\" = local.parameters[\"RegistryTableName\"], \"CASES_TABLE\" = local.parameters[\"CasesTableName\"]}}",
+    "environment_BlockerFunction": "${{\"EXPECTED_ACCOUNT\" = var.account_id, \"REGISTRY_TABLE\" = local.parameters[\"RegistryTableName\"], \"CASES_TABLE\" = local.parameters[\"CasesTableName\"], \"OPERATIONS_TABLE\" = local.parameters[\"OperationsTableName\"], \"LEASE_TABLE\" = local.parameters[\"LeaseTableName\"], \"DEFAULT_DRY_RUN\" = local.parameters[\"DefaultDryRun\"]}}",
+    "environment_TerminalFunction": "${{\"EXPECTED_ACCOUNT\" = var.account_id, \"REGISTRY_TABLE\" = local.parameters[\"RegistryTableName\"], \"CASES_TABLE\" = local.parameters[\"CasesTableName\"], \"PIPELINE_STATE_MACHINE_ARN\" = format(\"arn:%s:states:%s:%s:stateMachine:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_PipelineStateMachine)}}",
+    "environment_PublicationReconcilerFunction": "${{\"CASES_TABLE\" = local.parameters[\"CasesTableName\"], \"NOTIFICATION_BUS\" = local.parameters[\"SecurityEventBusName\"], \"PUBLICATION_INDEX\" = \"PublicationStateIndex\", \"NOTIFICATION_INDEX\" = \"NotificationStateIndex\", \"RECONCILE_BATCH_SIZE\" = \"25\"}}",
+    "environment_OutboxFunction": "${{\"CASES_TABLE\" = local.parameters[\"CasesTableName\"], \"NOTIFICATION_BUS\" = local.parameters[\"SecurityEventBusName\"]}}",
+    "environment_NotifierFunction": "${{\"EXPECTED_ACCOUNT\" = var.account_id, \"SLACK_SECRET_ARN\" = local.parameters[\"SlackSecretArn\"], \"SLACK_CHANNEL_ID\" = local.parameters[\"SlackChannelId\"], \"NOTIFICATIONS_ENABLED\" = (local.condition_SlackConfigured ? \"true\" : \"false\"), \"NOTIFICATIONS_TABLE\" = local.parameters[\"ReceiptTableName\"], \"EXPECTED_ACTIVITY_TABLE\" = local.parameters[\"ExpectedActivityTableName\"], \"AUDIT_BUCKET\" = local.parameters[\"AuditBucketName\"], \"DASHBOARD_BUCKET\" = local.parameters[\"AuditBucketName\"], \"REGISTRY_TABLE\" = local.parameters[\"RegistryTableName\"], \"CASES_TABLE\" = local.parameters[\"CasesTableName\"], \"QUEUE_URL\" = aws_sqs_queue.NotificationQueue.url}}",
+    "environment_OpsFunction": "${{\"EXPECTED_ACCOUNT\" = var.account_id, \"SLACK_SECRET_ARN\" = local.parameters[\"SlackSecretArn\"], \"SLACK_CHANNEL_ID\" = local.parameters[\"SlackChannelId\"], \"NOTIFICATIONS_ENABLED\" = (local.condition_SlackConfigured ? \"true\" : \"false\"), \"NOTIFICATIONS_TABLE\" = local.parameters[\"ReceiptTableName\"], \"EXPECTED_ACTIVITY_TABLE\" = local.parameters[\"ExpectedActivityTableName\"], \"AUDIT_BUCKET\" = local.parameters[\"AuditBucketName\"], \"DASHBOARD_BUCKET\" = local.parameters[\"AuditBucketName\"], \"OPS_TOPIC_ARN\" = local.parameters[\"OpsTopicArn\"]}}"
+  },
+  "resource": {
+    "aws_cloudwatch_log_group": {
+      "PipelineLogs": {
+        "name": "${local.name_PipelineLogs}",
+        "retention_in_days": "${local.parameters[\"LogRetentionDays\"]}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "region": "${var.region}",
+        "lifecycle": {
+          "prevent_destroy": true
+        }
+      },
+      "ApprovalLogs": {
+        "name": "${local.name_ApprovalLogs}",
+        "retention_in_days": "${local.parameters[\"LogRetentionDays\"]}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "region": "${var.region}",
+        "lifecycle": {
+          "prevent_destroy": true
+        }
+      },
+      "BlockerLogs": {
+        "name": "${local.name_BlockerLogs}",
+        "retention_in_days": "${local.parameters[\"LogRetentionDays\"]}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "region": "${var.region}",
+        "lifecycle": {
+          "prevent_destroy": true
+        }
+      },
+      "TerminalLogs": {
+        "name": "${local.name_TerminalLogs}",
+        "retention_in_days": "${local.parameters[\"LogRetentionDays\"]}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "region": "${var.region}",
+        "lifecycle": {
+          "prevent_destroy": true
+        }
+      },
+      "PublicationReconcilerLogs": {
+        "name": "${local.name_PublicationReconcilerLogs}",
+        "retention_in_days": "${local.parameters[\"LogRetentionDays\"]}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "region": "${var.region}",
+        "lifecycle": {
+          "prevent_destroy": true
+        }
+      },
+      "OutboxLogs": {
+        "name": "${local.name_OutboxLogs}",
+        "retention_in_days": "${local.parameters[\"LogRetentionDays\"]}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "region": "${var.region}",
+        "lifecycle": {
+          "prevent_destroy": true
+        }
+      },
+      "NotifierLogs": {
+        "name": "${local.name_NotifierLogs}",
+        "retention_in_days": "${local.parameters[\"LogRetentionDays\"]}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "region": "${var.region}",
+        "lifecycle": {
+          "prevent_destroy": true
+        }
+      },
+      "OpsLogs": {
+        "name": "${local.name_OpsLogs}",
+        "retention_in_days": "${local.parameters[\"LogRetentionDays\"]}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "region": "${var.region}",
+        "lifecycle": {
+          "prevent_destroy": true
+        }
+      },
+      "WorkflowLogs": {
+        "name": "${local.name_WorkflowLogs}",
+        "retention_in_days": "${local.parameters[\"LogRetentionDays\"]}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "region": "${var.region}",
+        "lifecycle": {
+          "prevent_destroy": true
+        }
+      }
+    },
+    "aws_iam_role": {
+      "PipelineRole": {
+        "name": "${local.name_PipelineRole}",
+        "assume_role_policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"sts:AssumeRole\", \"Principal\" = {\"Service\" = \"lambda.amazonaws.com\"}}]})}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}"
+      },
+      "ApprovalRole": {
+        "name": "${local.name_ApprovalRole}",
+        "assume_role_policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"sts:AssumeRole\", \"Principal\" = {\"Service\" = \"lambda.amazonaws.com\"}}]})}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}"
+      },
+      "BlockerRole": {
+        "name": "${local.name_BlockerRole}",
+        "assume_role_policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"sts:AssumeRole\", \"Principal\" = {\"Service\" = \"lambda.amazonaws.com\"}}]})}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}"
+      },
+      "TerminalRole": {
+        "name": "${local.name_TerminalRole}",
+        "assume_role_policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"sts:AssumeRole\", \"Principal\" = {\"Service\" = \"lambda.amazonaws.com\"}}]})}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}"
+      },
+      "PublicationReconcilerRole": {
+        "name": "${local.name_PublicationReconcilerRole}",
+        "assume_role_policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"sts:AssumeRole\", \"Principal\" = {\"Service\" = \"lambda.amazonaws.com\"}}]})}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}"
+      },
+      "OutboxRole": {
+        "name": "${local.name_OutboxRole}",
+        "assume_role_policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"sts:AssumeRole\", \"Principal\" = {\"Service\" = \"lambda.amazonaws.com\"}}]})}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}"
+      },
+      "NotifierRole": {
+        "name": "${local.name_NotifierRole}",
+        "assume_role_policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"sts:AssumeRole\", \"Principal\" = {\"Service\" = \"lambda.amazonaws.com\"}}]})}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}"
+      },
+      "OpsRole": {
+        "name": "${local.name_OpsRole}",
+        "assume_role_policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"sts:AssumeRole\", \"Principal\" = {\"Service\" = \"lambda.amazonaws.com\"}}]})}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}"
+      },
+      "WorkflowRole": {
+        "name": "${local.name_WorkflowRole}",
+        "assume_role_policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"sts:AssumeRole\", \"Principal\" = {\"Service\" = \"states.amazonaws.com\"}, \"Condition\" = {\"StringEquals\" = {\"aws:SourceAccount\" = var.account_id}, \"ArnEquals\" = {\"aws:SourceArn\" = format(\"arn:%s:states:%s:%s:stateMachine:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_PipelineStateMachine)}}}]})}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}"
+      },
+      "IngressOpsPublisherRole": {
+        "name": "${local.name_IngressOpsPublisherRole}",
+        "assume_role_policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"sts:AssumeRole\", \"Principal\" = {\"Service\" = \"events.amazonaws.com\"}, \"Condition\" = {\"StringEquals\" = {\"aws:SourceAccount\" = var.account_id}, \"ArnEquals\" = {\"aws:SourceArn\" = join(\"\", [\"arn:\", data.aws_partition.current.partition, \":events:\", var.region, \":\", var.account_id, \":rule/\", local.parameters[\"SecurityEventBusName\"], \"/\", local.parameters[\"InstallationId\"], \"-ingress-ops\"])}}}]})}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}"
+      }
+    },
+    "aws_iam_role_policy": {
+      "PipelineRole_Inline0": {
+        "name": "${\"ScopedRuntime\"}",
+        "role": "${aws_iam_role.PipelineRole.name}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [for item in [{\"Effect\" = \"Allow\", \"Action\" = [\"logs:CreateLogStream\", \"logs:PutLogEvents\"], \"Resource\" = join(\"\", [format(\"arn:%s:logs:%s:%s:log-group:%s:*\", data.aws_partition.current.partition, var.region, var.account_id, local.name_PipelineLogs), \":*\"])}, {\"Effect\" = \"Allow\", \"Action\" = [\"dynamodb:GetItem\", \"dynamodb:UpdateItem\"], \"Resource\" = local.parameters[\"CasesTableArn\"]}, {\"Effect\" = \"Allow\", \"Action\" = \"dynamodb:GetItem\", \"Resource\" = local.parameters[\"RegistryTableArn\"]}, {\"Effect\" = \"Allow\", \"Action\" = \"s3:PutObject\", \"Resource\" = join(\"\", [local.parameters[\"AuditBucketArn\"], \"/*/inv-*.md\"])}, {\"Effect\" = \"Allow\", \"Action\" = [\"kms:GenerateDataKey\", \"kms:Decrypt\"], \"Resource\" = local.parameters[\"AuditKeyArn\"]}, {\"Effect\" = \"Allow\", \"Action\" = \"dynamodb:GetItem\", \"Resource\" = [local.parameters[\"OperationsTableArn\"], local.parameters[\"LeaseTableArn\"]]}, {\"Effect\" = \"Allow\", \"Action\" = \"states:StartExecution\", \"Resource\" = format(\"arn:%s:states:%s:%s:stateMachine:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_PipelineStateMachine)}, {\"Effect\" = \"Allow\", \"Action\" = \"states:DescribeExecution\", \"Resource\" = format(\"arn:%s:states:%s:%s:execution:%s%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_PipelineStateMachine, \":inv-*\")}, (local.condition_ModelConfigured ? {\"Effect\" = \"Allow\", \"Action\" = \"bedrock:InvokeModel\", \"Resource\" = local.parameters[\"ModelArn\"]} : null), {\"Effect\" = \"Allow\", \"Action\" = \"sqs:SendMessage\", \"Resource\" = aws_sqs_queue.IngressFailures.arn}, {\"Effect\" = \"Allow\", \"Action\" = [\"kms:GenerateDataKey\", \"kms:Decrypt\"], \"Resource\" = local.parameters[\"OpsKeyArn\"], \"Condition\" = {\"StringEquals\" = {\"kms:ViaService\" = join(\"\", [\"sqs.\", var.region, \".\", data.aws_partition.current.dns_suffix]), \"kms:CallerAccount\" = var.account_id}}}] : item if item != null]})}"
+      },
+      "ApprovalRole_Inline0": {
+        "name": "${\"ScopedRuntime\"}",
+        "role": "${aws_iam_role.ApprovalRole.name}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = [\"logs:CreateLogStream\", \"logs:PutLogEvents\"], \"Resource\" = join(\"\", [format(\"arn:%s:logs:%s:%s:log-group:%s:*\", data.aws_partition.current.partition, var.region, var.account_id, local.name_ApprovalLogs), \":*\"])}, {\"Effect\" = \"Allow\", \"Action\" = [\"dynamodb:GetItem\", \"dynamodb:UpdateItem\"], \"Resource\" = local.parameters[\"CasesTableArn\"]}, {\"Effect\" = \"Allow\", \"Action\" = \"dynamodb:GetItem\", \"Resource\" = local.parameters[\"RegistryTableArn\"]}, {\"Effect\" = \"Allow\", \"Action\" = \"states:SendTaskSuccess\", \"Resource\" = \"*\", \"Condition\" = {\"ArnEquals\" = {\"lambda:SourceFunctionArn\" = format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_ApprovalFunction)}}}]})}"
+      },
+      "BlockerRole_Inline0": {
+        "name": "${\"ScopedRuntime\"}",
+        "role": "${aws_iam_role.BlockerRole.name}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [for item in [{\"Effect\" = \"Allow\", \"Action\" = [\"logs:CreateLogStream\", \"logs:PutLogEvents\"], \"Resource\" = join(\"\", [format(\"arn:%s:logs:%s:%s:log-group:%s:*\", data.aws_partition.current.partition, var.region, var.account_id, local.name_BlockerLogs), \":*\"])}, {\"Effect\" = \"Allow\", \"Action\" = \"dynamodb:GetItem\", \"Resource\" = local.parameters[\"RegistryTableArn\"]}, {\"Effect\" = \"Allow\", \"Action\" = \"dynamodb:GetItem\", \"Resource\" = local.parameters[\"CasesTableArn\"]}, {\"Effect\" = \"Allow\", \"Action\" = [\"dynamodb:GetItem\", \"dynamodb:PutItem\", \"dynamodb:UpdateItem\"], \"Resource\" = local.parameters[\"OperationsTableArn\"]}, {\"Effect\" = \"Allow\", \"Action\" = [\"dynamodb:GetItem\", \"dynamodb:PutItem\", \"dynamodb:DeleteItem\"], \"Resource\" = local.parameters[\"LeaseTableArn\"]}, {\"Effect\" = \"Allow\", \"Action\" = [\"wafv2:GetIPSet\", \"wafv2:UpdateIPSet\"], \"Resource\" = join(\"\", [\"arn:\", data.aws_partition.current.partition, \":wafv2:*:\", var.account_id, \":*/ipset/security-*/*\"])}, {\"Effect\" = \"Allow\", \"Action\" = [\"wafv2:GetWebACLForResource\", \"wafv2:GetWebACL\", \"wafv2:ListResourcesForWebACL\"], \"Resource\" = join(\"\", [\"arn:\", data.aws_partition.current.partition, \":wafv2:*:\", var.account_id, \":*/webacl/*/*\"])}, {\"Effect\" = \"Allow\", \"Action\" = \"cloudfront:GetDistributionConfig\", \"Resource\" = join(\"\", [\"arn:\", data.aws_partition.current.partition, \":cloudfront::\", var.account_id, \":distribution/*\"])}, {\"Effect\" = \"Allow\", \"Action\" = [\"cloudfront:ListDistributionsByWebACLId\", \"cloudfront:ListDistributionTenantsByCustomization\", \"elasticloadbalancing:DescribeWebACLAssociation\", \"appsync:ListResourcesForWebACL\", \"amplify:ListResourcesForWebACL\", \"bedrock-agentcore:GatewayListResourcesForWebACL\", \"ec2:DescribeVerifiedAccessInstanceWebAclAssociations\"], \"Resource\" = \"*\", \"Condition\" = {\"ArnEquals\" = {\"lambda:SourceFunctionArn\" = format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_BlockerFunction)}}}, {\"Effect\" = \"Allow\", \"Action\" = \"elasticloadbalancing:GetLoadBalancerWebACL\", \"Resource\" = join(\"\", [\"arn:\", data.aws_partition.current.partition, \":elasticloadbalancing:*:\", var.account_id, \":loadbalancer/app/*/*\"])}, {\"Effect\" = \"Allow\", \"Action\" = [\"cognito-idp:ListResourcesForWebACL\", \"apprunner:ListAssociatedServicesForWebAcl\"], \"Resource\" = join(\"\", [\"arn:\", data.aws_partition.current.partition, \":wafv2:*:\", var.account_id, \":*/webacl/*/*\"])}, (local.condition_NaclResponse ? {\"Effect\" = \"Allow\", \"Action\" = \"ec2:DescribeNetworkAcls\", \"Resource\" = \"*\"} : null), (local.condition_NaclResponse ? {\"Effect\" = \"Allow\", \"Action\" = \"ec2:ReplaceNetworkAclEntry\", \"Resource\" = join(\"\", [\"arn:\", data.aws_partition.current.partition, \":ec2:*:\", var.account_id, \":network-acl/*\"])} : null)] : item if item != null]})}"
+      },
+      "TerminalRole_Inline0": {
+        "name": "${\"ScopedRuntime\"}",
+        "role": "${aws_iam_role.TerminalRole.name}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = [\"logs:CreateLogStream\", \"logs:PutLogEvents\"], \"Resource\" = join(\"\", [format(\"arn:%s:logs:%s:%s:log-group:%s:*\", data.aws_partition.current.partition, var.region, var.account_id, local.name_TerminalLogs), \":*\"])}, {\"Effect\" = \"Allow\", \"Action\" = [\"dynamodb:GetItem\", \"dynamodb:UpdateItem\"], \"Resource\" = local.parameters[\"CasesTableArn\"]}, {\"Effect\" = \"Allow\", \"Action\" = \"dynamodb:GetItem\", \"Resource\" = local.parameters[\"RegistryTableArn\"]}, {\"Effect\" = \"Allow\", \"Action\" = \"s3:PutObject\", \"Resource\" = join(\"\", [local.parameters[\"AuditBucketArn\"], \"/*/inv-*.md\"])}, {\"Effect\" = \"Allow\", \"Action\" = [\"kms:GenerateDataKey\", \"kms:Decrypt\"], \"Resource\" = local.parameters[\"AuditKeyArn\"]}, {\"Effect\" = \"Allow\", \"Action\" = \"states:DescribeExecution\", \"Resource\" = format(\"arn:%s:states:%s:%s:execution:%s%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_PipelineStateMachine, \":inv-*\")}, {\"Effect\" = \"Allow\", \"Action\" = \"sqs:SendMessage\", \"Resource\" = aws_sqs_queue.TerminalFailures.arn}, {\"Effect\" = \"Allow\", \"Action\" = [\"kms:GenerateDataKey\", \"kms:Decrypt\"], \"Resource\" = local.parameters[\"OpsKeyArn\"], \"Condition\" = {\"StringEquals\" = {\"kms:ViaService\" = join(\"\", [\"sqs.\", var.region, \".\", data.aws_partition.current.dns_suffix]), \"kms:CallerAccount\" = var.account_id}}}]})}"
+      },
+      "PublicationReconcilerRole_Inline0": {
+        "name": "${\"ScopedRuntime\"}",
+        "role": "${aws_iam_role.PublicationReconcilerRole.name}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = [\"logs:CreateLogStream\", \"logs:PutLogEvents\"], \"Resource\" = join(\"\", [format(\"arn:%s:logs:%s:%s:log-group:%s:*\", data.aws_partition.current.partition, var.region, var.account_id, local.name_PublicationReconcilerLogs), \":*\"])}, {\"Effect\" = \"Allow\", \"Action\" = [\"dynamodb:GetItem\", \"dynamodb:UpdateItem\"], \"Resource\" = local.parameters[\"CasesTableArn\"]}, {\"Effect\" = \"Allow\", \"Action\" = \"dynamodb:Query\", \"Resource\" = [join(\"\", [local.parameters[\"CasesTableArn\"], \"/index/PublicationStateIndex\"]), join(\"\", [local.parameters[\"CasesTableArn\"], \"/index/NotificationStateIndex\"])]}, {\"Effect\" = \"Allow\", \"Action\" = \"s3:PutObject\", \"Resource\" = join(\"\", [local.parameters[\"AuditBucketArn\"], \"/*/inv-*.md\"])}, {\"Effect\" = \"Allow\", \"Action\" = [\"kms:GenerateDataKey\", \"kms:Decrypt\"], \"Resource\" = local.parameters[\"AuditKeyArn\"]}, {\"Effect\" = \"Allow\", \"Action\" = \"events:PutEvents\", \"Resource\" = local.parameters[\"SecurityEventBusArn\"], \"Condition\" = {\"StringEquals\" = {\"events:source\" = \"whs.hitl.dashboard\", \"events:detail-type\" = \"DashboardReportPublished.v1\"}}}, {\"Effect\" = \"Allow\", \"Action\" = \"cloudwatch:PutMetricData\", \"Resource\" = \"*\", \"Condition\" = {\"StringEquals\" = {\"cloudwatch:namespace\" = \"EnterpriseSecurity/Recovery\"}}}, {\"Effect\" = \"Allow\", \"Action\" = \"sqs:SendMessage\", \"Resource\" = aws_sqs_queue.TerminalFailures.arn}, {\"Effect\" = \"Allow\", \"Action\" = [\"kms:GenerateDataKey\", \"kms:Decrypt\"], \"Resource\" = local.parameters[\"OpsKeyArn\"], \"Condition\" = {\"StringEquals\" = {\"kms:ViaService\" = join(\"\", [\"sqs.\", var.region, \".\", data.aws_partition.current.dns_suffix]), \"kms:CallerAccount\" = var.account_id}}}]})}"
+      },
+      "OutboxRole_Inline0": {
+        "name": "${\"ScopedRuntime\"}",
+        "role": "${aws_iam_role.OutboxRole.name}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = [\"logs:CreateLogStream\", \"logs:PutLogEvents\"], \"Resource\" = join(\"\", [format(\"arn:%s:logs:%s:%s:log-group:%s:*\", data.aws_partition.current.partition, var.region, var.account_id, local.name_OutboxLogs), \":*\"])}, {\"Effect\" = \"Allow\", \"Action\" = [\"dynamodb:GetItem\", \"dynamodb:UpdateItem\"], \"Resource\" = local.parameters[\"CasesTableArn\"]}, {\"Effect\" = \"Allow\", \"Action\" = \"events:PutEvents\", \"Resource\" = local.parameters[\"SecurityEventBusArn\"], \"Condition\" = {\"StringEquals\" = {\"events:source\" = \"whs.hitl.dashboard\", \"events:detail-type\" = \"DashboardReportPublished.v1\"}}}, {\"Effect\" = \"Allow\", \"Action\" = [\"dynamodb:DescribeStream\", \"dynamodb:GetRecords\", \"dynamodb:GetShardIterator\", \"dynamodb:ListStreams\"], \"Resource\" = local.parameters[\"CasesTableStreamArn\"]}, {\"Effect\" = \"Allow\", \"Action\" = \"sqs:SendMessage\", \"Resource\" = aws_sqs_queue.StreamFailures.arn}, {\"Effect\" = \"Allow\", \"Action\" = [\"kms:GenerateDataKey\", \"kms:Decrypt\"], \"Resource\" = local.parameters[\"OpsKeyArn\"], \"Condition\" = {\"StringEquals\" = {\"kms:ViaService\" = join(\"\", [\"sqs.\", var.region, \".\", data.aws_partition.current.dns_suffix]), \"kms:CallerAccount\" = var.account_id}}}]})}"
+      },
+      "NotifierRole_Inline0": {
+        "name": "${\"ScopedRuntime\"}",
+        "role": "${aws_iam_role.NotifierRole.name}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [for item in [{\"Effect\" = \"Allow\", \"Action\" = [\"logs:CreateLogStream\", \"logs:PutLogEvents\"], \"Resource\" = join(\"\", [format(\"arn:%s:logs:%s:%s:log-group:%s:*\", data.aws_partition.current.partition, var.region, var.account_id, local.name_NotifierLogs), \":*\"])}, {\"Effect\" = \"Allow\", \"Action\" = \"dynamodb:GetItem\", \"Resource\" = local.parameters[\"RegistryTableArn\"]}, {\"Effect\" = \"Allow\", \"Action\" = \"dynamodb:GetItem\", \"Resource\" = local.parameters[\"CasesTableArn\"], \"Condition\" = {\"ArnEquals\" = {\"lambda:SourceFunctionArn\" = format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_NotifierFunction)}, \"ForAllValues:StringEquals\" = {\"dynamodb:Attributes\" = [\"case_id\", \"service_id\", \"dashboard_bucket\", \"dashboard_key\", \"publication_state\", \"publication_revision\", \"dashboard_notification_hotl\", \"dashboard_notification_hitl\", \"dashboard_notification_outcome\", \"dashboard_publication\"]}, \"Null\" = {\"dynamodb:Attributes\" = \"false\"}}}, {\"Effect\" = \"Allow\", \"Action\" = [\"dynamodb:GetItem\", \"dynamodb:PutItem\", \"dynamodb:UpdateItem\", \"dynamodb:DeleteItem\"], \"Resource\" = local.parameters[\"ReceiptTableArn\"]}, {\"Effect\" = \"Allow\", \"Action\" = \"s3:GetObject\", \"Resource\" = join(\"\", [local.parameters[\"AuditBucketArn\"], \"/*/inv-*.md\"])}, {\"Effect\" = \"Allow\", \"Action\" = \"kms:Decrypt\", \"Resource\" = local.parameters[\"AuditKeyArn\"]}, {\"Effect\" = \"Allow\", \"Action\" = [\"sqs:ReceiveMessage\", \"sqs:DeleteMessage\", \"sqs:GetQueueAttributes\", \"sqs:ChangeMessageVisibility\"], \"Resource\" = aws_sqs_queue.NotificationQueue.arn}, {\"Effect\" = \"Allow\", \"Action\" = \"kms:Decrypt\", \"Resource\" = local.parameters[\"OpsKeyArn\"], \"Condition\" = {\"StringEquals\" = {\"kms:ViaService\" = join(\"\", [\"sqs.\", var.region, \".\", data.aws_partition.current.dns_suffix]), \"kms:CallerAccount\" = var.account_id}}}, (local.condition_SlackConfigured ? {\"Effect\" = \"Allow\", \"Action\" = \"secretsmanager:GetSecretValue\", \"Resource\" = local.parameters[\"SlackSecretArn\"], \"Condition\" = {\"ArnEquals\" = {\"lambda:SourceFunctionArn\" = format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_NotifierFunction)}}} : null), (local.condition_SlackCustomerKey ? {\"Effect\" = \"Allow\", \"Action\" = \"kms:Decrypt\", \"Resource\" = local.parameters[\"SlackSecretKeyArn\"], \"Condition\" = {\"StringEquals\" = {\"kms:ViaService\" = join(\"\", [\"secretsmanager.\", var.region, \".\", data.aws_partition.current.dns_suffix])}, \"ArnEquals\" = {\"lambda:SourceFunctionArn\" = format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_NotifierFunction)}}} : null), {\"Effect\" = \"Allow\", \"Action\" = \"dynamodb:PutItem\", \"Resource\" = local.parameters[\"ExpectedActivityTableArn\"], \"Condition\" = {\"ArnEquals\" = {\"lambda:SourceFunctionArn\" = format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_NotifierFunction)}}}] : item if item != null]})}"
+      },
+      "OpsRole_Inline0": {
+        "name": "${\"ScopedRuntime\"}",
+        "role": "${aws_iam_role.OpsRole.name}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [for item in [{\"Effect\" = \"Allow\", \"Action\" = [\"logs:CreateLogStream\", \"logs:PutLogEvents\"], \"Resource\" = join(\"\", [format(\"arn:%s:logs:%s:%s:log-group:%s:*\", data.aws_partition.current.partition, var.region, var.account_id, local.name_OpsLogs), \":*\"])}, {\"Effect\" = \"Allow\", \"Action\" = [\"dynamodb:GetItem\", \"dynamodb:PutItem\", \"dynamodb:UpdateItem\"], \"Resource\" = local.parameters[\"ReceiptTableArn\"]}, (local.condition_SlackConfigured ? {\"Effect\" = \"Allow\", \"Action\" = \"secretsmanager:GetSecretValue\", \"Resource\" = local.parameters[\"SlackSecretArn\"], \"Condition\" = {\"ArnEquals\" = {\"lambda:SourceFunctionArn\" = format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_OpsFunction)}}} : null), (local.condition_SlackCustomerKey ? {\"Effect\" = \"Allow\", \"Action\" = \"kms:Decrypt\", \"Resource\" = local.parameters[\"SlackSecretKeyArn\"], \"Condition\" = {\"StringEquals\" = {\"kms:ViaService\" = join(\"\", [\"secretsmanager.\", var.region, \".\", data.aws_partition.current.dns_suffix])}, \"ArnEquals\" = {\"lambda:SourceFunctionArn\" = format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_OpsFunction)}}} : null), {\"Effect\" = \"Allow\", \"Action\" = \"dynamodb:PutItem\", \"Resource\" = local.parameters[\"ExpectedActivityTableArn\"], \"Condition\" = {\"ArnEquals\" = {\"lambda:SourceFunctionArn\" = format(\"arn:%s:lambda:%s:%s:function:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_OpsFunction)}}}] : item if item != null]})}"
+      },
+      "DashboardApprovalPolicy": {
+        "name": "${join(\"\", [var.stack_name, \"-approval\"])}",
+        "role": "${(split(\"/\", local.parameters[\"DashboardRoleArn\"]))[1]}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"lambda:InvokeFunction\", \"Resource\" = aws_lambda_alias.ApprovalAlias.arn, \"Condition\" = {\"ArnEquals\" = {\"lambda:SourceFunctionArn\" = local.parameters[\"DashboardFunctionArn\"]}}}]})}"
+      },
+      "WorkflowRole_Inline0": {
+        "name": "${\"InvokeScopedAliases\"}",
+        "role": "${aws_iam_role.WorkflowRole.name}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"lambda:InvokeFunction\", \"Resource\" = [aws_lambda_alias.PipelineAlias.arn, aws_lambda_alias.BlockerAlias.arn, aws_lambda_alias.TerminalAlias.arn]}, {\"Effect\" = \"Allow\", \"Action\" = [\"logs:CreateLogDelivery\", \"logs:GetLogDelivery\", \"logs:UpdateLogDelivery\", \"logs:DeleteLogDelivery\", \"logs:ListLogDeliveries\", \"logs:PutResourcePolicy\", \"logs:DescribeResourcePolicies\", \"logs:DescribeLogGroups\"], \"Resource\" = \"*\"}]})}"
+      },
+      "IngressOpsPublisherRole_Inline0": {
+        "name": "${\"PublishOwnedIngressAlarms\"}",
+        "role": "${aws_iam_role.IngressOpsPublisherRole.name}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"sns:Publish\", \"Resource\" = local.parameters[\"OpsTopicArn\"]}, {\"Effect\" = \"Allow\", \"Action\" = [\"kms:GenerateDataKey\", \"kms:Decrypt\"], \"Resource\" = local.parameters[\"OpsKeyArn\"], \"Condition\" = {\"StringEquals\" = {\"kms:ViaService\" = join(\"\", [\"sns.\", var.region, \".\", data.aws_partition.current.dns_suffix]), \"kms:CallerAccount\" = var.account_id}}}]})}"
+      }
+    },
+    "aws_lambda_function": {
+      "PipelineFunction": {
+        "runtime": "${\"python3.13\"}",
+        "handler": "${\"runtime.case_pipeline.handler\"}",
+        "timeout": "${120}",
+        "memory_size": "${512}",
+        "role": "${format(\"arn:%s:iam::%s:role/%s\", data.aws_partition.current.partition, var.account_id, local.name_PipelineRole)}",
+        "description": "${join(\"\", [\"Reviewed configuration revision \", local.parameters[\"RuntimeConfigRevision\"]])}",
+        "function_name": "${local.name_PipelineFunction}",
+        "publish": true,
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "s3_bucket": "${local.parameters[\"RuntimeCodeBucket\"]}",
+        "s3_key": "${local.parameters[\"RuntimeCodeKey\"]}",
+        "s3_object_version": "${local.parameters[\"RuntimeCodeVersion\"]}",
+        "source_code_hash": "${local.parameters[\"RuntimeCodeSha256\"]}",
+        "environment": [
+          {
+            "variables": "${local.environment_PipelineFunction}"
+          }
+        ],
+        "lifecycle": {
+          "precondition": [
+            {
+              "condition": "${length(base64encode(jsonencode(local.environment_PipelineFunction))) * 3 / 4 - length(regexall(\"=\", base64encode(jsonencode(local.environment_PipelineFunction)))) <= 4096}",
+              "error_message": "Lambda UTF-8 environment JSON exceeds 4096 bytes; reduce exclusions, regions or configured names."
+            }
+          ]
+        },
+        "logging_config": [
+          {
+            "log_group": "${local.name_PipelineLogs}",
+            "log_format": "${\"JSON\"}"
+          }
+        ],
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_cloudwatch_log_group.PipelineLogs",
+          "aws_iam_role.PipelineRole",
+          "aws_iam_role_policy.PipelineRole_Inline0"
+        ]
+      },
+      "ApprovalFunction": {
+        "runtime": "${\"python3.13\"}",
+        "handler": "${\"runtime.approval.handler\"}",
+        "timeout": "${30}",
+        "memory_size": "${256}",
+        "role": "${format(\"arn:%s:iam::%s:role/%s\", data.aws_partition.current.partition, var.account_id, local.name_ApprovalRole)}",
+        "description": "${join(\"\", [\"Reviewed configuration revision \", local.parameters[\"RuntimeConfigRevision\"]])}",
+        "function_name": "${local.name_ApprovalFunction}",
+        "publish": true,
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "s3_bucket": "${local.parameters[\"RuntimeCodeBucket\"]}",
+        "s3_key": "${local.parameters[\"RuntimeCodeKey\"]}",
+        "s3_object_version": "${local.parameters[\"RuntimeCodeVersion\"]}",
+        "source_code_hash": "${local.parameters[\"RuntimeCodeSha256\"]}",
+        "environment": [
+          {
+            "variables": "${local.environment_ApprovalFunction}"
+          }
+        ],
+        "lifecycle": {
+          "precondition": [
+            {
+              "condition": "${length(base64encode(jsonencode(local.environment_ApprovalFunction))) * 3 / 4 - length(regexall(\"=\", base64encode(jsonencode(local.environment_ApprovalFunction)))) <= 4096}",
+              "error_message": "Lambda UTF-8 environment JSON exceeds 4096 bytes; reduce exclusions, regions or configured names."
+            }
+          ]
+        },
+        "logging_config": [
+          {
+            "log_group": "${local.name_ApprovalLogs}",
+            "log_format": "${\"JSON\"}"
+          }
+        ],
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_cloudwatch_log_group.ApprovalLogs",
+          "aws_iam_role.ApprovalRole",
+          "aws_iam_role_policy.ApprovalRole_Inline0"
+        ]
+      },
+      "BlockerFunction": {
+        "runtime": "${\"python3.13\"}",
+        "handler": "${\"runtime.blocker.handler\"}",
+        "timeout": "${150}",
+        "memory_size": "${256}",
+        "role": "${format(\"arn:%s:iam::%s:role/%s\", data.aws_partition.current.partition, var.account_id, local.name_BlockerRole)}",
+        "description": "${join(\"\", [\"Reviewed configuration revision \", local.parameters[\"RuntimeConfigRevision\"]])}",
+        "function_name": "${local.name_BlockerFunction}",
+        "publish": true,
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "s3_bucket": "${local.parameters[\"RuntimeCodeBucket\"]}",
+        "s3_key": "${local.parameters[\"RuntimeCodeKey\"]}",
+        "s3_object_version": "${local.parameters[\"RuntimeCodeVersion\"]}",
+        "source_code_hash": "${local.parameters[\"RuntimeCodeSha256\"]}",
+        "environment": [
+          {
+            "variables": "${local.environment_BlockerFunction}"
+          }
+        ],
+        "lifecycle": {
+          "precondition": [
+            {
+              "condition": "${length(base64encode(jsonencode(local.environment_BlockerFunction))) * 3 / 4 - length(regexall(\"=\", base64encode(jsonencode(local.environment_BlockerFunction)))) <= 4096}",
+              "error_message": "Lambda UTF-8 environment JSON exceeds 4096 bytes; reduce exclusions, regions or configured names."
+            }
+          ]
+        },
+        "logging_config": [
+          {
+            "log_group": "${local.name_BlockerLogs}",
+            "log_format": "${\"JSON\"}"
+          }
+        ],
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_cloudwatch_log_group.BlockerLogs",
+          "aws_iam_role.BlockerRole",
+          "aws_iam_role_policy.BlockerRole_Inline0"
+        ]
+      },
+      "TerminalFunction": {
+        "runtime": "${\"python3.13\"}",
+        "handler": "${\"runtime.terminal.handler\"}",
+        "timeout": "${120}",
+        "memory_size": "${256}",
+        "role": "${format(\"arn:%s:iam::%s:role/%s\", data.aws_partition.current.partition, var.account_id, local.name_TerminalRole)}",
+        "description": "${join(\"\", [\"Reviewed configuration revision \", local.parameters[\"RuntimeConfigRevision\"]])}",
+        "function_name": "${local.name_TerminalFunction}",
+        "publish": true,
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "s3_bucket": "${local.parameters[\"RuntimeCodeBucket\"]}",
+        "s3_key": "${local.parameters[\"RuntimeCodeKey\"]}",
+        "s3_object_version": "${local.parameters[\"RuntimeCodeVersion\"]}",
+        "source_code_hash": "${local.parameters[\"RuntimeCodeSha256\"]}",
+        "environment": [
+          {
+            "variables": "${local.environment_TerminalFunction}"
+          }
+        ],
+        "lifecycle": {
+          "precondition": [
+            {
+              "condition": "${length(base64encode(jsonencode(local.environment_TerminalFunction))) * 3 / 4 - length(regexall(\"=\", base64encode(jsonencode(local.environment_TerminalFunction)))) <= 4096}",
+              "error_message": "Lambda UTF-8 environment JSON exceeds 4096 bytes; reduce exclusions, regions or configured names."
+            }
+          ]
+        },
+        "logging_config": [
+          {
+            "log_group": "${local.name_TerminalLogs}",
+            "log_format": "${\"JSON\"}"
+          }
+        ],
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_cloudwatch_log_group.TerminalLogs",
+          "aws_iam_role.TerminalRole",
+          "aws_iam_role_policy.TerminalRole_Inline0"
+        ]
+      },
+      "PublicationReconcilerFunction": {
+        "runtime": "${\"python3.13\"}",
+        "handler": "${\"runtime.publication_reconciler.handler\"}",
+        "timeout": "${120}",
+        "memory_size": "${256}",
+        "role": "${format(\"arn:%s:iam::%s:role/%s\", data.aws_partition.current.partition, var.account_id, local.name_PublicationReconcilerRole)}",
+        "reserved_concurrent_executions": "${1}",
+        "description": "${join(\"\", [\"Reviewed configuration revision \", local.parameters[\"RuntimeConfigRevision\"]])}",
+        "function_name": "${local.name_PublicationReconcilerFunction}",
+        "publish": true,
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "s3_bucket": "${local.parameters[\"RuntimeCodeBucket\"]}",
+        "s3_key": "${local.parameters[\"RuntimeCodeKey\"]}",
+        "s3_object_version": "${local.parameters[\"RuntimeCodeVersion\"]}",
+        "source_code_hash": "${local.parameters[\"RuntimeCodeSha256\"]}",
+        "environment": [
+          {
+            "variables": "${local.environment_PublicationReconcilerFunction}"
+          }
+        ],
+        "lifecycle": {
+          "precondition": [
+            {
+              "condition": "${length(base64encode(jsonencode(local.environment_PublicationReconcilerFunction))) * 3 / 4 - length(regexall(\"=\", base64encode(jsonencode(local.environment_PublicationReconcilerFunction)))) <= 4096}",
+              "error_message": "Lambda UTF-8 environment JSON exceeds 4096 bytes; reduce exclusions, regions or configured names."
+            }
+          ]
+        },
+        "logging_config": [
+          {
+            "log_group": "${local.name_PublicationReconcilerLogs}",
+            "log_format": "${\"JSON\"}"
+          }
+        ],
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_cloudwatch_log_group.PublicationReconcilerLogs",
+          "aws_iam_role.PublicationReconcilerRole",
+          "aws_iam_role_policy.PublicationReconcilerRole_Inline0"
+        ]
+      },
+      "OutboxFunction": {
+        "runtime": "${\"python3.13\"}",
+        "handler": "${\"runtime.outbox_delivery.handler\"}",
+        "timeout": "${60}",
+        "memory_size": "${256}",
+        "role": "${format(\"arn:%s:iam::%s:role/%s\", data.aws_partition.current.partition, var.account_id, local.name_OutboxRole)}",
+        "description": "${join(\"\", [\"Reviewed configuration revision \", local.parameters[\"RuntimeConfigRevision\"]])}",
+        "function_name": "${local.name_OutboxFunction}",
+        "publish": true,
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "s3_bucket": "${local.parameters[\"RuntimeCodeBucket\"]}",
+        "s3_key": "${local.parameters[\"RuntimeCodeKey\"]}",
+        "s3_object_version": "${local.parameters[\"RuntimeCodeVersion\"]}",
+        "source_code_hash": "${local.parameters[\"RuntimeCodeSha256\"]}",
+        "environment": [
+          {
+            "variables": "${local.environment_OutboxFunction}"
+          }
+        ],
+        "lifecycle": {
+          "precondition": [
+            {
+              "condition": "${length(base64encode(jsonencode(local.environment_OutboxFunction))) * 3 / 4 - length(regexall(\"=\", base64encode(jsonencode(local.environment_OutboxFunction)))) <= 4096}",
+              "error_message": "Lambda UTF-8 environment JSON exceeds 4096 bytes; reduce exclusions, regions or configured names."
+            }
+          ]
+        },
+        "logging_config": [
+          {
+            "log_group": "${local.name_OutboxLogs}",
+            "log_format": "${\"JSON\"}"
+          }
+        ],
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_cloudwatch_log_group.OutboxLogs",
+          "aws_iam_role.OutboxRole",
+          "aws_iam_role_policy.OutboxRole_Inline0"
+        ]
+      },
+      "NotifierFunction": {
+        "runtime": "${\"python3.13\"}",
+        "handler": "${\"runtime.notifier.handler\"}",
+        "timeout": "${60}",
+        "memory_size": "${256}",
+        "role": "${format(\"arn:%s:iam::%s:role/%s\", data.aws_partition.current.partition, var.account_id, local.name_NotifierRole)}",
+        "description": "${join(\"\", [\"Reviewed configuration revision \", local.parameters[\"RuntimeConfigRevision\"]])}",
+        "function_name": "${local.name_NotifierFunction}",
+        "publish": true,
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "s3_bucket": "${local.parameters[\"RuntimeCodeBucket\"]}",
+        "s3_key": "${local.parameters[\"RuntimeCodeKey\"]}",
+        "s3_object_version": "${local.parameters[\"RuntimeCodeVersion\"]}",
+        "source_code_hash": "${local.parameters[\"RuntimeCodeSha256\"]}",
+        "environment": [
+          {
+            "variables": "${local.environment_NotifierFunction}"
+          }
+        ],
+        "lifecycle": {
+          "precondition": [
+            {
+              "condition": "${length(base64encode(jsonencode(local.environment_NotifierFunction))) * 3 / 4 - length(regexall(\"=\", base64encode(jsonencode(local.environment_NotifierFunction)))) <= 4096}",
+              "error_message": "Lambda UTF-8 environment JSON exceeds 4096 bytes; reduce exclusions, regions or configured names."
+            }
+          ]
+        },
+        "logging_config": [
+          {
+            "log_group": "${local.name_NotifierLogs}",
+            "log_format": "${\"JSON\"}"
+          }
+        ],
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_cloudwatch_log_group.NotifierLogs",
+          "aws_iam_role.NotifierRole",
+          "aws_iam_role_policy.NotifierRole_Inline0"
+        ]
+      },
+      "OpsFunction": {
+        "runtime": "${\"python3.13\"}",
+        "handler": "${\"runtime.ops.handler\"}",
+        "timeout": "${60}",
+        "memory_size": "${256}",
+        "role": "${format(\"arn:%s:iam::%s:role/%s\", data.aws_partition.current.partition, var.account_id, local.name_OpsRole)}",
+        "description": "${join(\"\", [\"Reviewed configuration revision \", local.parameters[\"RuntimeConfigRevision\"]])}",
+        "function_name": "${local.name_OpsFunction}",
+        "publish": true,
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "s3_bucket": "${local.parameters[\"RuntimeCodeBucket\"]}",
+        "s3_key": "${local.parameters[\"RuntimeCodeKey\"]}",
+        "s3_object_version": "${local.parameters[\"RuntimeCodeVersion\"]}",
+        "source_code_hash": "${local.parameters[\"RuntimeCodeSha256\"]}",
+        "environment": [
+          {
+            "variables": "${local.environment_OpsFunction}"
+          }
+        ],
+        "lifecycle": {
+          "precondition": [
+            {
+              "condition": "${length(base64encode(jsonencode(local.environment_OpsFunction))) * 3 / 4 - length(regexall(\"=\", base64encode(jsonencode(local.environment_OpsFunction)))) <= 4096}",
+              "error_message": "Lambda UTF-8 environment JSON exceeds 4096 bytes; reduce exclusions, regions or configured names."
+            }
+          ]
+        },
+        "logging_config": [
+          {
+            "log_group": "${local.name_OpsLogs}",
+            "log_format": "${\"JSON\"}"
+          }
+        ],
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_cloudwatch_log_group.OpsLogs",
+          "aws_iam_role.OpsRole",
+          "aws_iam_role_policy.OpsRole_Inline0"
+        ]
+      }
+    },
+    "aws_lambda_alias": {
+      "PipelineAlias": {
+        "function_name": "${local.name_PipelineFunction}",
+        "function_version": "${aws_lambda_function.PipelineFunction.version}",
+        "name": "${\"live\"}",
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_lambda_function.PipelineFunction"
+        ]
+      },
+      "ApprovalAlias": {
+        "function_name": "${local.name_ApprovalFunction}",
+        "function_version": "${aws_lambda_function.ApprovalFunction.version}",
+        "name": "${\"live\"}",
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_lambda_function.ApprovalFunction"
+        ]
+      },
+      "BlockerAlias": {
+        "function_name": "${local.name_BlockerFunction}",
+        "function_version": "${aws_lambda_function.BlockerFunction.version}",
+        "name": "${\"live\"}",
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_lambda_function.BlockerFunction"
+        ]
+      },
+      "TerminalAlias": {
+        "function_name": "${local.name_TerminalFunction}",
+        "function_version": "${aws_lambda_function.TerminalFunction.version}",
+        "name": "${\"live\"}",
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_lambda_function.TerminalFunction"
+        ]
+      },
+      "PublicationReconcilerAlias": {
+        "function_name": "${local.name_PublicationReconcilerFunction}",
+        "function_version": "${aws_lambda_function.PublicationReconcilerFunction.version}",
+        "name": "${\"live\"}",
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_lambda_function.PublicationReconcilerFunction"
+        ]
+      },
+      "OutboxAlias": {
+        "function_name": "${local.name_OutboxFunction}",
+        "function_version": "${aws_lambda_function.OutboxFunction.version}",
+        "name": "${\"live\"}",
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_lambda_function.OutboxFunction"
+        ]
+      },
+      "NotifierAlias": {
+        "function_name": "${local.name_NotifierFunction}",
+        "function_version": "${aws_lambda_function.NotifierFunction.version}",
+        "name": "${\"live\"}",
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_lambda_function.NotifierFunction"
+        ]
+      },
+      "OpsAlias": {
+        "function_name": "${local.name_OpsFunction}",
+        "function_version": "${aws_lambda_function.OpsFunction.version}",
+        "name": "${\"live\"}",
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_lambda_function.OpsFunction"
+        ]
+      }
+    },
+    "aws_sfn_state_machine": {
+      "PipelineStateMachine": {
+        "role_arn": "${format(\"arn:%s:iam::%s:role/%s\", data.aws_partition.current.partition, var.account_id, local.name_WorkflowRole)}",
+        "type": "${\"STANDARD\"}",
+        "name": "${local.name_PipelineStateMachine}",
+        "definition": "${jsonencode({\"Comment\" = \"Service-bound HOTL and HITL with durable publications and committed human approvals\", \"StartAt\" = \"PrepareCase\", \"TimeoutSeconds\" = 18000, \"States\" = {\"PrepareCase\" = {\"Type\" = \"Task\", \"Resource\" = \"arn:aws:states:::lambda:invoke\", \"Parameters\" = {\"FunctionName\" = aws_lambda_alias.PipelineAlias.arn, \"Payload\" = {\"stage\" = \"prepare\", \"signal.$\" = \"$.signal\", \"dry_run.$\" = \"$.dry_run\", \"execution_arn.$\" = \"$$.Execution.Id\"}}, \"TimeoutSeconds\" = 120, \"ResultPath\" = \"$.prepared\", \"ResultSelector\" = {\"result.$\" = \"$.Payload\"}, \"Retry\" = [{\"ErrorEquals\" = [\"PublicationBusy\", \"ClientError\"], \"IntervalSeconds\" = 5, \"BackoffRate\" = 2, \"MaxAttempts\" = 6}, {\"ErrorEquals\" = [\"Lambda.ServiceException\", \"Lambda.AWSLambdaException\", \"Lambda.SdkClientException\", \"Lambda.TooManyRequestsException\"], \"IntervalSeconds\" = 2, \"BackoffRate\" = 2, \"MaxAttempts\" = 4}], \"Catch\" = [{\"ErrorEquals\" = [\"States.ALL\"], \"ResultPath\" = \"$.failure\", \"Next\" = \"PreparationFailed\"}], \"Next\" = \"RouteCase\"}, \"RouteCase\" = {\"Type\" = \"Choice\", \"Choices\" = [{\"Variable\" = \"$.prepared.result.tier\", \"NumericEquals\" = 1, \"Next\" = \"AutomaticBlock\"}], \"Default\" = \"PublishAndWait\"}, \"PublishAndWait\" = {\"Type\" = \"Task\", \"Resource\" = \"arn:aws:states:::lambda:invoke.waitForTaskToken\", \"Parameters\" = {\"FunctionName\" = aws_lambda_alias.PipelineAlias.arn, \"Payload\" = {\"stage\" = \"wait_approval\", \"case_id.$\" = \"$.prepared.result.case_id\", \"service_id.$\" = \"$.prepared.result.service_id\", \"execution_arn.$\" = \"$$.Execution.Id\", \"TaskToken.$\" = \"$$.Task.Token\"}}, \"TimeoutSeconds\" = 14400, \"ResultPath\" = \"$.approval\", \"Retry\" = [{\"ErrorEquals\" = [\"PublicationBusy\", \"ClientError\"], \"IntervalSeconds\" = 5, \"BackoffRate\" = 2, \"MaxAttempts\" = 6}, {\"ErrorEquals\" = [\"Lambda.ServiceException\", \"Lambda.AWSLambdaException\", \"Lambda.SdkClientException\", \"Lambda.TooManyRequestsException\"], \"IntervalSeconds\" = 2, \"BackoffRate\" = 2, \"MaxAttempts\" = 4}], \"Catch\" = [{\"ErrorEquals\" = [\"States.Timeout\"], \"ResultPath\" = \"$.failure\", \"Next\" = \"RecordTimedOut\"}, {\"ErrorEquals\" = [\"States.ALL\"], \"ResultPath\" = \"$.failure\", \"Next\" = \"ApprovalFailed\"}], \"Next\" = \"Decision\"}, \"Decision\" = {\"Type\" = \"Choice\", \"Choices\" = [{\"Variable\" = \"$.approval.decision\", \"StringEquals\" = \"reject\", \"Next\" = \"RecordRejected\"}, {\"Variable\" = \"$.approval.decision\", \"StringEquals\" = \"approve\", \"Next\" = \"VerifyApprovalCommit\"}], \"Default\" = \"RecordApprovalUnconfirmed\"}, \"VerifyApprovalCommit\" = {\"Type\" = \"Task\", \"Resource\" = \"arn:aws:states:::lambda:invoke\", \"Parameters\" = {\"FunctionName\" = aws_lambda_alias.PipelineAlias.arn, \"Payload\" = {\"stage\" = \"approval_ready\", \"case_id.$\" = \"$.prepared.result.case_id\", \"service_id.$\" = \"$.prepared.result.service_id\", \"execution_arn.$\" = \"$$.Execution.Id\"}}, \"TimeoutSeconds\" = 120, \"ResultPath\" = \"$.commit\", \"ResultSelector\" = {\"result.$\" = \"$.Payload\"}, \"Retry\" = [{\"ErrorEquals\" = [\"Lambda.ServiceException\", \"Lambda.AWSLambdaException\", \"Lambda.SdkClientException\", \"Lambda.TooManyRequestsException\"], \"IntervalSeconds\" = 2, \"BackoffRate\" = 2, \"MaxAttempts\" = 4}], \"Catch\" = [{\"ErrorEquals\" = [\"States.ALL\"], \"ResultPath\" = \"$.failure\", \"Next\" = \"ApprovalFailed\"}], \"Next\" = \"ApprovalCommit\"}, \"ApprovalCommit\" = {\"Type\" = \"Choice\", \"Choices\" = [{\"And\" = [{\"Variable\" = \"$.commit.result.ready\", \"BooleanEquals\" = true}, {\"Variable\" = \"$.commit.result.approved_action\", \"StringEquals\" = \"block_ip\"}], \"Next\" = \"ApprovedBlock\"}, {\"Variable\" = \"$.commit.result.ready\", \"BooleanEquals\" = true, \"Next\" = \"RecordNoAction\"}, {\"Variable\" = \"$.commit.result.keep_waiting\", \"BooleanEquals\" = true, \"Next\" = \"WaitForCommit\"}], \"Default\" = \"RecordApprovalUnconfirmed\"}, \"WaitForCommit\" = {\"Type\" = \"Wait\", \"Seconds\" = 2, \"Next\" = \"VerifyApprovalCommit\"}, \"AutomaticBlock\" = {\"Type\" = \"Task\", \"Resource\" = \"arn:aws:states:::lambda:invoke\", \"Parameters\" = {\"FunctionName\" = aws_lambda_alias.BlockerAlias.arn, \"Payload\" = {\"case_id.$\" = \"$.prepared.result.case_id\", \"service_id.$\" = \"$.prepared.result.service_id\", \"attacker_ip.$\" = \"$.prepared.result.target.source_ip\", \"dry_run.$\" = \"$.prepared.result.dry_run\", \"human_approved\" = false, \"operation_id.$\" = \"$$.Execution.Id\"}}, \"TimeoutSeconds\" = 180, \"ResultPath\" = \"$.block\", \"ResultSelector\" = {\"result.$\" = \"$.Payload\"}, \"Retry\" = [{\"ErrorEquals\" = [\"Lambda.ServiceException\", \"Lambda.AWSLambdaException\", \"Lambda.SdkClientException\", \"Lambda.TooManyRequestsException\"], \"IntervalSeconds\" = 2, \"BackoffRate\" = 2, \"MaxAttempts\" = 4}], \"Catch\" = [{\"ErrorEquals\" = [\"States.ALL\"], \"ResultPath\" = \"$.failure\", \"Next\" = \"RecordAutomaticFailure\"}], \"Next\" = \"RecordAutomaticResult\"}, \"ApprovedBlock\" = {\"Type\" = \"Task\", \"Resource\" = \"arn:aws:states:::lambda:invoke\", \"Parameters\" = {\"FunctionName\" = aws_lambda_alias.BlockerAlias.arn, \"Payload\" = {\"case_id.$\" = \"$.prepared.result.case_id\", \"service_id.$\" = \"$.prepared.result.service_id\", \"attacker_ip.$\" = \"$.prepared.result.target.source_ip\", \"dry_run.$\" = \"$.prepared.result.dry_run\", \"human_approved\" = true, \"operation_id.$\" = \"$$.Execution.Id\"}}, \"TimeoutSeconds\" = 180, \"ResultPath\" = \"$.block\", \"ResultSelector\" = {\"result.$\" = \"$.Payload\"}, \"Retry\" = [{\"ErrorEquals\" = [\"Lambda.ServiceException\", \"Lambda.AWSLambdaException\", \"Lambda.SdkClientException\", \"Lambda.TooManyRequestsException\"], \"IntervalSeconds\" = 2, \"BackoffRate\" = 2, \"MaxAttempts\" = 4}], \"Catch\" = [{\"ErrorEquals\" = [\"States.ALL\"], \"ResultPath\" = \"$.failure\", \"Next\" = \"RecordApprovedFailure\"}], \"Next\" = \"RecordApprovedResult\"}, \"RecordAutomaticResult\" = {\"Type\" = \"Task\", \"Resource\" = \"arn:aws:states:::lambda:invoke\", \"Parameters\" = {\"FunctionName\" = aws_lambda_alias.PipelineAlias.arn, \"Payload\" = {\"stage\" = \"record\", \"case_id.$\" = \"$.prepared.result.case_id\", \"service_id.$\" = \"$.prepared.result.service_id\", \"execution_arn.$\" = \"$$.Execution.Id\", \"outcome\" = \"AUTO_BLOCK_RESULT\", \"mode\" = \"HOTL\", \"response.$\" = \"$.block.result\"}}, \"TimeoutSeconds\" = 120, \"ResultPath\" = \"$.recorded\", \"ResultSelector\" = {\"result.$\" = \"$.Payload\"}, \"Retry\" = [{\"ErrorEquals\" = [\"PublicationBusy\", \"ClientError\"], \"IntervalSeconds\" = 5, \"BackoffRate\" = 2, \"MaxAttempts\" = 6}, {\"ErrorEquals\" = [\"Lambda.ServiceException\", \"Lambda.AWSLambdaException\", \"Lambda.SdkClientException\", \"Lambda.TooManyRequestsException\"], \"IntervalSeconds\" = 2, \"BackoffRate\" = 2, \"MaxAttempts\" = 4}], \"Catch\" = [{\"ErrorEquals\" = [\"States.ALL\"], \"ResultPath\" = \"$.failure\", \"Next\" = \"PublicationFailed\"}], \"End\" = true}, \"RecordAutomaticFailure\" = {\"Type\" = \"Task\", \"Resource\" = \"arn:aws:states:::lambda:invoke\", \"Parameters\" = {\"FunctionName\" = aws_lambda_alias.PipelineAlias.arn, \"Payload\" = {\"stage\" = \"record\", \"case_id.$\" = \"$.prepared.result.case_id\", \"service_id.$\" = \"$.prepared.result.service_id\", \"execution_arn.$\" = \"$$.Execution.Id\", \"outcome\" = \"AUTO_BLOCK_FAILED\", \"mode\" = \"HOTL\", \"failure.$\" = \"$.failure\"}}, \"TimeoutSeconds\" = 120, \"ResultPath\" = \"$.recorded\", \"ResultSelector\" = {\"result.$\" = \"$.Payload\"}, \"Retry\" = [{\"ErrorEquals\" = [\"PublicationBusy\", \"ClientError\"], \"IntervalSeconds\" = 5, \"BackoffRate\" = 2, \"MaxAttempts\" = 6}, {\"ErrorEquals\" = [\"Lambda.ServiceException\", \"Lambda.AWSLambdaException\", \"Lambda.SdkClientException\", \"Lambda.TooManyRequestsException\"], \"IntervalSeconds\" = 2, \"BackoffRate\" = 2, \"MaxAttempts\" = 4}], \"Catch\" = [{\"ErrorEquals\" = [\"States.ALL\"], \"ResultPath\" = \"$.failure\", \"Next\" = \"PublicationFailed\"}], \"End\" = true}, \"RecordApprovedResult\" = {\"Type\" = \"Task\", \"Resource\" = \"arn:aws:states:::lambda:invoke\", \"Parameters\" = {\"FunctionName\" = aws_lambda_alias.PipelineAlias.arn, \"Payload\" = {\"stage\" = \"record\", \"case_id.$\" = \"$.prepared.result.case_id\", \"service_id.$\" = \"$.prepared.result.service_id\", \"execution_arn.$\" = \"$$.Execution.Id\", \"outcome\" = \"BLOCK_RESULT\", \"mode\" = \"HITL\", \"response.$\" = \"$.block.result\"}}, \"TimeoutSeconds\" = 120, \"ResultPath\" = \"$.recorded\", \"ResultSelector\" = {\"result.$\" = \"$.Payload\"}, \"Retry\" = [{\"ErrorEquals\" = [\"PublicationBusy\", \"ClientError\"], \"IntervalSeconds\" = 5, \"BackoffRate\" = 2, \"MaxAttempts\" = 6}, {\"ErrorEquals\" = [\"Lambda.ServiceException\", \"Lambda.AWSLambdaException\", \"Lambda.SdkClientException\", \"Lambda.TooManyRequestsException\"], \"IntervalSeconds\" = 2, \"BackoffRate\" = 2, \"MaxAttempts\" = 4}], \"Catch\" = [{\"ErrorEquals\" = [\"States.ALL\"], \"ResultPath\" = \"$.failure\", \"Next\" = \"PublicationFailed\"}], \"End\" = true}, \"RecordApprovedFailure\" = {\"Type\" = \"Task\", \"Resource\" = \"arn:aws:states:::lambda:invoke\", \"Parameters\" = {\"FunctionName\" = aws_lambda_alias.PipelineAlias.arn, \"Payload\" = {\"stage\" = \"record\", \"case_id.$\" = \"$.prepared.result.case_id\", \"service_id.$\" = \"$.prepared.result.service_id\", \"execution_arn.$\" = \"$$.Execution.Id\", \"outcome\" = \"BLOCK_FAILED\", \"mode\" = \"HITL\", \"failure.$\" = \"$.failure\"}}, \"TimeoutSeconds\" = 120, \"ResultPath\" = \"$.recorded\", \"ResultSelector\" = {\"result.$\" = \"$.Payload\"}, \"Retry\" = [{\"ErrorEquals\" = [\"PublicationBusy\", \"ClientError\"], \"IntervalSeconds\" = 5, \"BackoffRate\" = 2, \"MaxAttempts\" = 6}, {\"ErrorEquals\" = [\"Lambda.ServiceException\", \"Lambda.AWSLambdaException\", \"Lambda.SdkClientException\", \"Lambda.TooManyRequestsException\"], \"IntervalSeconds\" = 2, \"BackoffRate\" = 2, \"MaxAttempts\" = 4}], \"Catch\" = [{\"ErrorEquals\" = [\"States.ALL\"], \"ResultPath\" = \"$.failure\", \"Next\" = \"PublicationFailed\"}], \"End\" = true}, \"RecordTimedOut\" = {\"Type\" = \"Task\", \"Resource\" = \"arn:aws:states:::lambda:invoke\", \"Parameters\" = {\"FunctionName\" = aws_lambda_alias.PipelineAlias.arn, \"Payload\" = {\"stage\" = \"record\", \"case_id.$\" = \"$.prepared.result.case_id\", \"service_id.$\" = \"$.prepared.result.service_id\", \"execution_arn.$\" = \"$$.Execution.Id\", \"outcome\" = \"TIMED_OUT\", \"mode\" = \"HITL\", \"failure.$\" = \"$.failure\"}}, \"TimeoutSeconds\" = 120, \"ResultPath\" = \"$.recorded\", \"ResultSelector\" = {\"result.$\" = \"$.Payload\"}, \"Retry\" = [{\"ErrorEquals\" = [\"PublicationBusy\", \"ClientError\"], \"IntervalSeconds\" = 5, \"BackoffRate\" = 2, \"MaxAttempts\" = 6}, {\"ErrorEquals\" = [\"Lambda.ServiceException\", \"Lambda.AWSLambdaException\", \"Lambda.SdkClientException\", \"Lambda.TooManyRequestsException\"], \"IntervalSeconds\" = 2, \"BackoffRate\" = 2, \"MaxAttempts\" = 4}], \"Catch\" = [{\"ErrorEquals\" = [\"States.ALL\"], \"ResultPath\" = \"$.failure\", \"Next\" = \"PublicationFailed\"}], \"End\" = true}, \"RecordRejected\" = {\"Type\" = \"Task\", \"Resource\" = \"arn:aws:states:::lambda:invoke\", \"Parameters\" = {\"FunctionName\" = aws_lambda_alias.PipelineAlias.arn, \"Payload\" = {\"stage\" = \"record\", \"case_id.$\" = \"$.prepared.result.case_id\", \"service_id.$\" = \"$.prepared.result.service_id\", \"execution_arn.$\" = \"$$.Execution.Id\", \"outcome\" = \"REJECTED\", \"mode\" = \"HITL\"}}, \"TimeoutSeconds\" = 120, \"ResultPath\" = \"$.recorded\", \"ResultSelector\" = {\"result.$\" = \"$.Payload\"}, \"Retry\" = [{\"ErrorEquals\" = [\"PublicationBusy\", \"ClientError\"], \"IntervalSeconds\" = 5, \"BackoffRate\" = 2, \"MaxAttempts\" = 6}, {\"ErrorEquals\" = [\"Lambda.ServiceException\", \"Lambda.AWSLambdaException\", \"Lambda.SdkClientException\", \"Lambda.TooManyRequestsException\"], \"IntervalSeconds\" = 2, \"BackoffRate\" = 2, \"MaxAttempts\" = 4}], \"Catch\" = [{\"ErrorEquals\" = [\"States.ALL\"], \"ResultPath\" = \"$.failure\", \"Next\" = \"PublicationFailed\"}], \"End\" = true}, \"RecordNoAction\" = {\"Type\" = \"Task\", \"Resource\" = \"arn:aws:states:::lambda:invoke\", \"Parameters\" = {\"FunctionName\" = aws_lambda_alias.PipelineAlias.arn, \"Payload\" = {\"stage\" = \"record\", \"case_id.$\" = \"$.prepared.result.case_id\", \"service_id.$\" = \"$.prepared.result.service_id\", \"execution_arn.$\" = \"$$.Execution.Id\", \"outcome\" = \"NO_ACTION\", \"mode\" = \"HITL\"}}, \"TimeoutSeconds\" = 120, \"ResultPath\" = \"$.recorded\", \"ResultSelector\" = {\"result.$\" = \"$.Payload\"}, \"Retry\" = [{\"ErrorEquals\" = [\"PublicationBusy\", \"ClientError\"], \"IntervalSeconds\" = 5, \"BackoffRate\" = 2, \"MaxAttempts\" = 6}, {\"ErrorEquals\" = [\"Lambda.ServiceException\", \"Lambda.AWSLambdaException\", \"Lambda.SdkClientException\", \"Lambda.TooManyRequestsException\"], \"IntervalSeconds\" = 2, \"BackoffRate\" = 2, \"MaxAttempts\" = 4}], \"Catch\" = [{\"ErrorEquals\" = [\"States.ALL\"], \"ResultPath\" = \"$.failure\", \"Next\" = \"PublicationFailed\"}], \"End\" = true}, \"RecordApprovalUnconfirmed\" = {\"Type\" = \"Task\", \"Resource\" = \"arn:aws:states:::lambda:invoke\", \"Parameters\" = {\"FunctionName\" = aws_lambda_alias.PipelineAlias.arn, \"Payload\" = {\"stage\" = \"record\", \"case_id.$\" = \"$.prepared.result.case_id\", \"service_id.$\" = \"$.prepared.result.service_id\", \"execution_arn.$\" = \"$$.Execution.Id\", \"outcome\" = \"APPROVAL_FAILED\", \"mode\" = \"HITL\"}}, \"TimeoutSeconds\" = 120, \"ResultPath\" = \"$.recorded\", \"ResultSelector\" = {\"result.$\" = \"$.Payload\"}, \"Retry\" = [{\"ErrorEquals\" = [\"PublicationBusy\", \"ClientError\"], \"IntervalSeconds\" = 5, \"BackoffRate\" = 2, \"MaxAttempts\" = 6}, {\"ErrorEquals\" = [\"Lambda.ServiceException\", \"Lambda.AWSLambdaException\", \"Lambda.SdkClientException\", \"Lambda.TooManyRequestsException\"], \"IntervalSeconds\" = 2, \"BackoffRate\" = 2, \"MaxAttempts\" = 4}], \"Catch\" = [{\"ErrorEquals\" = [\"States.ALL\"], \"ResultPath\" = \"$.failure\", \"Next\" = \"PublicationFailed\"}], \"End\" = true}, \"PreparationFailed\" = {\"Type\" = \"Task\", \"Resource\" = \"arn:aws:states:::lambda:invoke\", \"Parameters\" = {\"FunctionName\" = aws_lambda_alias.TerminalAlias.arn, \"Payload\" = {\"stage\" = \"AI1\", \"case_id.$\" = \"$$.Execution.Name\", \"service_id.$\" = \"$$.Execution.Input.signal.detail.service_id\", \"failure.$\" = \"$.failure\", \"execution_arn.$\" = \"$$.Execution.Id\"}}, \"TimeoutSeconds\" = 120, \"ResultPath\" = \"$.terminal\", \"ResultSelector\" = {\"result.$\" = \"$.Payload\"}, \"Retry\" = [{\"ErrorEquals\" = [\"PublicationBusy\", \"ClientError\"], \"IntervalSeconds\" = 5, \"BackoffRate\" = 2, \"MaxAttempts\" = 6}, {\"ErrorEquals\" = [\"Lambda.ServiceException\", \"Lambda.AWSLambdaException\", \"Lambda.SdkClientException\", \"Lambda.TooManyRequestsException\"], \"IntervalSeconds\" = 2, \"BackoffRate\" = 2, \"MaxAttempts\" = 4}], \"End\" = true}, \"ApprovalFailed\" = {\"Type\" = \"Task\", \"Resource\" = \"arn:aws:states:::lambda:invoke\", \"Parameters\" = {\"FunctionName\" = aws_lambda_alias.TerminalAlias.arn, \"Payload\" = {\"stage\" = \"APPROVAL\", \"case_id.$\" = \"$$.Execution.Name\", \"service_id.$\" = \"$$.Execution.Input.signal.detail.service_id\", \"failure.$\" = \"$.failure\", \"execution_arn.$\" = \"$$.Execution.Id\"}}, \"TimeoutSeconds\" = 120, \"ResultPath\" = \"$.terminal\", \"ResultSelector\" = {\"result.$\" = \"$.Payload\"}, \"Retry\" = [{\"ErrorEquals\" = [\"PublicationBusy\", \"ClientError\"], \"IntervalSeconds\" = 5, \"BackoffRate\" = 2, \"MaxAttempts\" = 6}, {\"ErrorEquals\" = [\"Lambda.ServiceException\", \"Lambda.AWSLambdaException\", \"Lambda.SdkClientException\", \"Lambda.TooManyRequestsException\"], \"IntervalSeconds\" = 2, \"BackoffRate\" = 2, \"MaxAttempts\" = 4}], \"End\" = true}, \"PublicationFailed\" = {\"Type\" = \"Task\", \"Resource\" = \"arn:aws:states:::lambda:invoke\", \"Parameters\" = {\"FunctionName\" = aws_lambda_alias.TerminalAlias.arn, \"Payload\" = {\"stage\" = \"PUBLICATION\", \"case_id.$\" = \"$$.Execution.Name\", \"service_id.$\" = \"$$.Execution.Input.signal.detail.service_id\", \"failure.$\" = \"$.failure\", \"execution_arn.$\" = \"$$.Execution.Id\"}}, \"TimeoutSeconds\" = 120, \"ResultPath\" = \"$.terminal\", \"ResultSelector\" = {\"result.$\" = \"$.Payload\"}, \"Retry\" = [{\"ErrorEquals\" = [\"PublicationBusy\", \"ClientError\"], \"IntervalSeconds\" = 5, \"BackoffRate\" = 2, \"MaxAttempts\" = 6}, {\"ErrorEquals\" = [\"Lambda.ServiceException\", \"Lambda.AWSLambdaException\", \"Lambda.SdkClientException\", \"Lambda.TooManyRequestsException\"], \"IntervalSeconds\" = 2, \"BackoffRate\" = 2, \"MaxAttempts\" = 4}], \"End\" = true}}})}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "logging_configuration": [
+          {
+            "level": "${\"ERROR\"}",
+            "include_execution_data": "${false}",
+            "log_destination": "${format(\"arn:%s:logs:%s:%s:log-group:%s:*\", data.aws_partition.current.partition, var.region, var.account_id, local.name_WorkflowLogs)}"
+          }
+        ],
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_cloudwatch_log_group.WorkflowLogs",
+          "aws_iam_role.WorkflowRole",
+          "aws_iam_role_policy.WorkflowRole_Inline0"
+        ]
+      }
+    },
+    "aws_sqs_queue": {
+      "NotificationQueue": {
+        "kms_master_key_id": "${local.parameters[\"OpsKeyArn\"]}",
+        "message_retention_seconds": "${1209600}",
+        "visibility_timeout_seconds": "${360}",
+        "max_message_size": "${1048576}",
+        "name": "${local.name_NotificationQueue}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "redrive_policy": "${jsonencode({\"deadLetterTargetArn\" = aws_sqs_queue.NotificationFailures.arn, \"maxReceiveCount\" = 5})}",
+        "region": "${var.region}"
+      },
+      "NotificationFailures": {
+        "kms_master_key_id": "${local.parameters[\"OpsKeyArn\"]}",
+        "message_retention_seconds": "${1209600}",
+        "max_message_size": "${1048576}",
+        "name": "${local.name_NotificationFailures}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "region": "${var.region}"
+      },
+      "IngressFailures": {
+        "kms_master_key_id": "${local.parameters[\"OpsKeyArn\"]}",
+        "message_retention_seconds": "${1209600}",
+        "max_message_size": "${1048576}",
+        "name": "${local.name_IngressFailures}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "region": "${var.region}"
+      },
+      "TerminalFailures": {
+        "kms_master_key_id": "${local.parameters[\"OpsKeyArn\"]}",
+        "message_retention_seconds": "${1209600}",
+        "max_message_size": "${1048576}",
+        "name": "${local.name_TerminalFailures}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "region": "${var.region}"
+      },
+      "StreamFailures": {
+        "kms_master_key_id": "${local.parameters[\"OpsKeyArn\"]}",
+        "message_retention_seconds": "${1209600}",
+        "max_message_size": "${1048576}",
+        "name": "${local.name_StreamFailures}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "region": "${var.region}"
+      },
+      "IngressOpsFailures": {
+        "kms_master_key_id": "${local.parameters[\"OpsKeyArn\"]}",
+        "message_retention_seconds": "${1209600}",
+        "max_message_size": 1048576,
+        "name": "${local.name_IngressOpsFailures}",
+        "tags": "${merge({\"ManagedBy\" = \"enterprise-security\", \"Environment\" = local.parameters[\"Environment\"], \"security:control-plane\" = \"true\"}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "region": "${var.region}"
+      }
+    },
+    "aws_lambda_event_source_mapping": {
+      "OutboxStreamMapping": {
+        "function_name": "${aws_lambda_alias.OutboxAlias.arn}",
+        "event_source_arn": "${local.parameters[\"CasesTableStreamArn\"]}",
+        "starting_position": "${\"LATEST\"}",
+        "batch_size": "${25}",
+        "bisect_batch_on_function_error": "${true}",
+        "maximum_retry_attempts": "${3}",
+        "maximum_record_age_in_seconds": "${3600}",
+        "function_response_types": "${[\"ReportBatchItemFailures\"]}",
+        "destination_config": [
+          {
+            "on_failure": [
+              {
+                "destination_arn": "${aws_sqs_queue.StreamFailures.arn}"
+              }
+            ]
+          }
+        ],
+        "filter_criteria": [
+          {
+            "filter": [
+              {
+                "pattern": "${\"{\\\"eventName\\\":[\\\"INSERT\\\",\\\"MODIFY\\\"]}\"}"
+              }
+            ]
+          }
+        ],
+        "region": "${var.region}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "depends_on": [
+          "aws_iam_role.OutboxRole",
+          "aws_lambda_alias.OutboxAlias",
+          "aws_sqs_queue.StreamFailures",
+          "aws_sqs_queue_policy.StreamFailurePolicy"
+        ]
+      },
+      "NotifierQueueMapping": {
+        "function_name": "${aws_lambda_alias.NotifierAlias.arn}",
+        "event_source_arn": "${aws_sqs_queue.NotificationQueue.arn}",
+        "batch_size": "${5}",
+        "function_response_types": "${[\"ReportBatchItemFailures\"]}",
+        "enabled": "${(local.condition_SlackConfigured ? true : false)}",
+        "region": "${var.region}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "depends_on": [
+          "aws_iam_role.NotifierRole",
+          "aws_lambda_alias.NotifierAlias",
+          "aws_sqs_queue.NotificationQueue",
+          "aws_sqs_queue_policy.EventQueuePolicy",
+          "aws_sqs_queue_policy.NotificationFailurePolicy"
+        ]
+      }
+    },
+    "aws_cloudwatch_event_rule": {
+      "ServiceSignalRule": {
+        "event_bus_name": "${local.parameters[\"SecurityEventBusName\"]}",
+        "state": "${\"ENABLED\"}",
+        "name": "${local.name_ServiceSignalRule}",
+        "event_pattern": "${jsonencode({\"source\" = [\"security.service\"], \"detail-type\" = [\"ServiceSecuritySignal.v1\"], \"account\" = [var.account_id], \"region\" = [var.region], \"detail\" = {\"schema_version\" = [\"1.0\"], \"confidence\" = [\"provider_signal\"]}})}",
+        "region": "${var.region}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}"
+      },
+      "TerminalRule": {
+        "state": "${\"ENABLED\"}",
+        "name": "${local.name_TerminalRule}",
+        "event_pattern": "${jsonencode({\"source\" = [\"aws.states\"], \"detail-type\" = [\"Step Functions Execution Status Change\"], \"account\" = [var.account_id], \"region\" = [var.region], \"detail\" = {\"stateMachineArn\" = [format(\"arn:%s:states:%s:%s:stateMachine:%s\", data.aws_partition.current.partition, var.region, var.account_id, local.name_PipelineStateMachine)], \"status\" = [\"FAILED\", \"TIMED_OUT\", \"ABORTED\"]}})}",
+        "region": "${var.region}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}"
+      },
+      "ReconcileSchedule": {
+        "schedule_expression": "${\"rate(1 minute)\"}",
+        "state": "${\"ENABLED\"}",
+        "name": "${local.name_ReconcileSchedule}",
+        "region": "${var.region}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}"
+      },
+      "PublicationRule": {
+        "event_bus_name": "${local.parameters[\"SecurityEventBusName\"]}",
+        "state": "${\"ENABLED\"}",
+        "name": "${local.name_PublicationRule}",
+        "event_pattern": "${jsonencode({\"source\" = [\"whs.hitl.dashboard\"], \"detail-type\" = [\"DashboardReportPublished.v1\"], \"account\" = [var.account_id], \"region\" = [var.region], \"detail\" = {\"schema_version\" = [\"1.0\"]}})}",
+        "region": "${var.region}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}"
+      },
+      "IngressOpsRule": {
+        "event_bus_name": "${local.parameters[\"SecurityEventBusName\"]}",
+        "state": "${\"ENABLED\"}",
+        "name": "${local.name_IngressOpsRule}",
+        "event_pattern": "${jsonencode({\"source\" = [\"aws.cloudwatch\"], \"detail-type\" = [\"CloudWatch Alarm State Change\"], \"account\" = [var.account_id], \"detail\" = {\"alarmName\" = local.parameters[\"IngressAlarmNames\"], \"state\" = {\"value\" = [\"ALARM\", \"OK\", \"INSUFFICIENT_DATA\"]}}})}",
+        "region": "${var.region}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "depends_on": [
+          "aws_sqs_queue_policy.IngressOpsFailurePolicy"
+        ]
+      }
+    },
+    "aws_cloudwatch_event_target": {
+      "ServiceSignalRule_Target0": {
+        "target_id": "${\"Deliver\"}",
+        "arn": "${aws_lambda_alias.PipelineAlias.arn}",
+        "rule": "${aws_cloudwatch_event_rule.ServiceSignalRule.name}",
+        "event_bus_name": "${local.parameters[\"SecurityEventBusName\"]}",
+        "retry_policy": [
+          {
+            "maximum_retry_attempts": "${10}",
+            "maximum_event_age_in_seconds": "${3600}"
+          }
+        ],
+        "dead_letter_config": [
+          {
+            "arn": "${aws_sqs_queue.IngressFailures.arn}"
+          }
+        ],
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_cloudwatch_event_rule.ServiceSignalRule",
+          "aws_lambda_alias.PipelineAlias",
+          "aws_sqs_queue.IngressFailures"
+        ]
+      },
+      "TerminalRule_Target0": {
+        "target_id": "${\"Deliver\"}",
+        "arn": "${aws_lambda_alias.TerminalAlias.arn}",
+        "rule": "${aws_cloudwatch_event_rule.TerminalRule.name}",
+        "retry_policy": [
+          {
+            "maximum_retry_attempts": "${10}",
+            "maximum_event_age_in_seconds": "${3600}"
+          }
+        ],
+        "dead_letter_config": [
+          {
+            "arn": "${aws_sqs_queue.TerminalFailures.arn}"
+          }
+        ],
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_cloudwatch_event_rule.TerminalRule",
+          "aws_lambda_alias.TerminalAlias",
+          "aws_sqs_queue.TerminalFailures"
+        ]
+      },
+      "ReconcileSchedule_Target0": {
+        "target_id": "${\"Deliver\"}",
+        "arn": "${aws_lambda_alias.PublicationReconcilerAlias.arn}",
+        "rule": "${aws_cloudwatch_event_rule.ReconcileSchedule.name}",
+        "retry_policy": [
+          {
+            "maximum_retry_attempts": "${10}",
+            "maximum_event_age_in_seconds": "${3600}"
+          }
+        ],
+        "dead_letter_config": [
+          {
+            "arn": "${aws_sqs_queue.TerminalFailures.arn}"
+          }
+        ],
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_cloudwatch_event_rule.ReconcileSchedule",
+          "aws_lambda_alias.PublicationReconcilerAlias",
+          "aws_sqs_queue.TerminalFailures"
+        ]
+      },
+      "PublicationRule_Target0": {
+        "target_id": "${\"ReportQueue\"}",
+        "arn": "${aws_sqs_queue.NotificationQueue.arn}",
+        "rule": "${aws_cloudwatch_event_rule.PublicationRule.name}",
+        "event_bus_name": "${local.parameters[\"SecurityEventBusName\"]}",
+        "retry_policy": [
+          {
+            "maximum_retry_attempts": "${10}",
+            "maximum_event_age_in_seconds": "${3600}"
+          }
+        ],
+        "dead_letter_config": [
+          {
+            "arn": "${aws_sqs_queue.NotificationFailures.arn}"
+          }
+        ],
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_cloudwatch_event_rule.PublicationRule",
+          "aws_sqs_queue.NotificationFailures",
+          "aws_sqs_queue.NotificationQueue"
+        ]
+      },
+      "IngressOpsRule_Target0": {
+        "target_id": "${\"OwnedOpsTopic\"}",
+        "arn": "${local.parameters[\"OpsTopicArn\"]}",
+        "role_arn": "${format(\"arn:%s:iam::%s:role/%s\", data.aws_partition.current.partition, var.account_id, local.name_IngressOpsPublisherRole)}",
+        "rule": "${aws_cloudwatch_event_rule.IngressOpsRule.name}",
+        "event_bus_name": "${local.parameters[\"SecurityEventBusName\"]}",
+        "retry_policy": [
+          {
+            "maximum_retry_attempts": "${10}",
+            "maximum_event_age_in_seconds": "${3600}"
+          }
+        ],
+        "dead_letter_config": [
+          {
+            "arn": "${aws_sqs_queue.IngressOpsFailures.arn}"
+          }
+        ],
+        "input_transformer": [
+          {
+            "input_paths": "${{\"alarm\" = \"$.detail.alarmName\", \"state\" = \"$.detail.state.value\"}}",
+            "input_template": "${\"{\\\"AlarmName\\\":<alarm>,\\\"NewStateValue\\\":<state>}\"}"
+          }
+        ],
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_cloudwatch_event_rule.IngressOpsRule",
+          "aws_iam_role.IngressOpsPublisherRole",
+          "aws_sqs_queue.IngressOpsFailures",
+          "aws_sqs_queue_policy.IngressOpsFailurePolicy"
+        ]
+      }
+    },
+    "aws_lambda_permission": {
+      "ServiceSignalRulePermission": {
+        "action": "${\"lambda:InvokeFunction\"}",
+        "function_name": "${local.name_PipelineFunction}",
+        "principal": "${\"events.amazonaws.com\"}",
+        "source_account": "${var.account_id}",
+        "source_arn": "${format(\"arn:%s:events:%s:%s:rule/%s\", data.aws_partition.current.partition, var.region, var.account_id, (local.parameters[\"SecurityEventBusName\"] == \"default\" ? local.name_ServiceSignalRule : join(\"/\", [local.parameters[\"SecurityEventBusName\"], local.name_ServiceSignalRule])))}",
+        "qualifier": "${\"live\"}",
+        "statement_id": "${lookup(var.physical_names, \"ServiceSignalRulePermission\", \"ServiceSignalRulePermission\")}",
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_lambda_alias.PipelineAlias"
+        ]
+      },
+      "TerminalRulePermission": {
+        "action": "${\"lambda:InvokeFunction\"}",
+        "function_name": "${local.name_TerminalFunction}",
+        "principal": "${\"events.amazonaws.com\"}",
+        "source_account": "${var.account_id}",
+        "source_arn": "${format(\"arn:%s:events:%s:%s:rule/%s\", data.aws_partition.current.partition, var.region, var.account_id, (\"default\" == \"default\" ? local.name_TerminalRule : join(\"/\", [\"default\", local.name_TerminalRule])))}",
+        "qualifier": "${\"live\"}",
+        "statement_id": "${lookup(var.physical_names, \"TerminalRulePermission\", \"TerminalRulePermission\")}",
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_lambda_alias.TerminalAlias"
+        ]
+      },
+      "ReconcileSchedulePermission": {
+        "action": "${\"lambda:InvokeFunction\"}",
+        "function_name": "${local.name_PublicationReconcilerFunction}",
+        "principal": "${\"events.amazonaws.com\"}",
+        "source_account": "${var.account_id}",
+        "source_arn": "${format(\"arn:%s:events:%s:%s:rule/%s\", data.aws_partition.current.partition, var.region, var.account_id, (\"default\" == \"default\" ? local.name_ReconcileSchedule : join(\"/\", [\"default\", local.name_ReconcileSchedule])))}",
+        "qualifier": "${\"live\"}",
+        "statement_id": "${lookup(var.physical_names, \"ReconcileSchedulePermission\", \"ReconcileSchedulePermission\")}",
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_lambda_alias.PublicationReconcilerAlias"
+        ]
+      },
+      "OpsPermission": {
+        "action": "${\"lambda:InvokeFunction\"}",
+        "function_name": "${local.name_OpsFunction}",
+        "principal": "${\"sns.amazonaws.com\"}",
+        "source_account": "${var.account_id}",
+        "source_arn": "${local.parameters[\"OpsTopicArn\"]}",
+        "qualifier": "${\"live\"}",
+        "statement_id": "${lookup(var.physical_names, \"OpsPermission\", \"OpsPermission\")}",
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_lambda_alias.OpsAlias"
+        ]
+      }
+    },
+    "aws_sqs_queue_policy": {
+      "EventQueuePolicy": {
+        "queue_url": "${aws_sqs_queue.NotificationQueue.url}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"sqs:SendMessage\", \"Resource\" = aws_sqs_queue.NotificationQueue.arn, \"Sid\" = \"AllowOwnedEventBridgeDelivery\", \"Principal\" = {\"Service\" = \"events.amazonaws.com\"}, \"Condition\" = {\"ArnEquals\" = {\"aws:SourceArn\" = format(\"arn:%s:events:%s:%s:rule/%s\", data.aws_partition.current.partition, var.region, var.account_id, (local.parameters[\"SecurityEventBusName\"] == \"default\" ? local.name_PublicationRule : join(\"/\", [local.parameters[\"SecurityEventBusName\"], local.name_PublicationRule])))}, \"StringEquals\" = {\"aws:SourceAccount\" = var.account_id}}}, {\"Sid\" = \"DenyInsecureTransport\", \"Effect\" = \"Deny\", \"Principal\" = \"*\", \"Action\" = \"sqs:*\", \"Resource\" = aws_sqs_queue.NotificationQueue.arn, \"Condition\" = {\"Bool\" = {\"aws:SecureTransport\" = \"false\"}}}]})}",
+        "region": "${var.region}"
+      },
+      "NotificationFailurePolicy": {
+        "queue_url": "${aws_sqs_queue.NotificationFailures.url}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"sqs:SendMessage\", \"Resource\" = aws_sqs_queue.NotificationFailures.arn, \"Sid\" = \"AllowOwnedEventBridgeDelivery\", \"Principal\" = {\"Service\" = \"events.amazonaws.com\"}, \"Condition\" = {\"ArnEquals\" = {\"aws:SourceArn\" = format(\"arn:%s:events:%s:%s:rule/%s\", data.aws_partition.current.partition, var.region, var.account_id, (local.parameters[\"SecurityEventBusName\"] == \"default\" ? local.name_PublicationRule : join(\"/\", [local.parameters[\"SecurityEventBusName\"], local.name_PublicationRule])))}, \"StringEquals\" = {\"aws:SourceAccount\" = var.account_id}}}, {\"Sid\" = \"DenyInsecureTransport\", \"Effect\" = \"Deny\", \"Principal\" = \"*\", \"Action\" = \"sqs:*\", \"Resource\" = aws_sqs_queue.NotificationFailures.arn, \"Condition\" = {\"Bool\" = {\"aws:SecureTransport\" = \"false\"}}}]})}",
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_sqs_queue_policy.EventQueuePolicy"
+        ]
+      },
+      "IngressFailurePolicy": {
+        "queue_url": "${aws_sqs_queue.IngressFailures.url}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"sqs:SendMessage\", \"Resource\" = aws_sqs_queue.IngressFailures.arn, \"Sid\" = \"AllowOwnedEventBridgeDelivery\", \"Principal\" = {\"Service\" = \"events.amazonaws.com\"}, \"Condition\" = {\"ArnEquals\" = {\"aws:SourceArn\" = format(\"arn:%s:events:%s:%s:rule/%s\", data.aws_partition.current.partition, var.region, var.account_id, (local.parameters[\"SecurityEventBusName\"] == \"default\" ? local.name_ServiceSignalRule : join(\"/\", [local.parameters[\"SecurityEventBusName\"], local.name_ServiceSignalRule])))}, \"StringEquals\" = {\"aws:SourceAccount\" = var.account_id}}}, {\"Sid\" = \"DenyInsecureTransport\", \"Effect\" = \"Deny\", \"Principal\" = \"*\", \"Action\" = \"sqs:*\", \"Resource\" = aws_sqs_queue.IngressFailures.arn, \"Condition\" = {\"Bool\" = {\"aws:SecureTransport\" = \"false\"}}}]})}",
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_sqs_queue_policy.EventQueuePolicy"
+        ]
+      },
+      "TerminalFailurePolicy": {
+        "queue_url": "${aws_sqs_queue.TerminalFailures.url}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"sqs:SendMessage\", \"Resource\" = aws_sqs_queue.TerminalFailures.arn, \"Sid\" = \"AllowOwnedEventBridgeDelivery\", \"Principal\" = {\"Service\" = \"events.amazonaws.com\"}, \"Condition\" = {\"ArnEquals\" = {\"aws:SourceArn\" = [format(\"arn:%s:events:%s:%s:rule/%s\", data.aws_partition.current.partition, var.region, var.account_id, (\"default\" == \"default\" ? local.name_TerminalRule : join(\"/\", [\"default\", local.name_TerminalRule]))), format(\"arn:%s:events:%s:%s:rule/%s\", data.aws_partition.current.partition, var.region, var.account_id, (\"default\" == \"default\" ? local.name_ReconcileSchedule : join(\"/\", [\"default\", local.name_ReconcileSchedule])))]}, \"StringEquals\" = {\"aws:SourceAccount\" = var.account_id}}}, {\"Sid\" = \"DenyInsecureTransport\", \"Effect\" = \"Deny\", \"Principal\" = \"*\", \"Action\" = \"sqs:*\", \"Resource\" = aws_sqs_queue.TerminalFailures.arn, \"Condition\" = {\"Bool\" = {\"aws:SecureTransport\" = \"false\"}}}]})}",
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_sqs_queue_policy.EventQueuePolicy"
+        ]
+      },
+      "StreamFailurePolicy": {
+        "queue_url": "${aws_sqs_queue.StreamFailures.url}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Deny\", \"Principal\" = \"*\", \"Action\" = \"sqs:*\", \"Resource\" = aws_sqs_queue.StreamFailures.arn, \"Condition\" = {\"Bool\" = {\"aws:SecureTransport\" = \"false\"}}}]})}",
+        "region": "${var.region}"
+      },
+      "IngressOpsFailurePolicy": {
+        "queue_url": "${aws_sqs_queue.IngressOpsFailures.url}",
+        "policy": "${jsonencode({\"Version\" = \"2012-10-17\", \"Statement\" = [{\"Effect\" = \"Allow\", \"Action\" = \"sqs:SendMessage\", \"Resource\" = aws_sqs_queue.IngressOpsFailures.arn, \"Principal\" = {\"Service\" = \"events.amazonaws.com\"}, \"Condition\" = {\"ArnEquals\" = {\"aws:SourceArn\" = join(\"\", [\"arn:\", data.aws_partition.current.partition, \":events:\", var.region, \":\", var.account_id, \":rule/\", local.parameters[\"SecurityEventBusName\"], \"/\", local.parameters[\"InstallationId\"], \"-ingress-ops\"])}, \"StringEquals\" = {\"aws:SourceAccount\" = var.account_id}}}, {\"Effect\" = \"Deny\", \"Principal\" = \"*\", \"Action\" = \"sqs:*\", \"Resource\" = aws_sqs_queue.IngressOpsFailures.arn, \"Condition\" = {\"Bool\" = {\"aws:SecureTransport\" = \"false\"}}}]})}",
+        "region": "${var.region}"
+      }
+    },
+    "aws_lambda_function_event_invoke_config": {
+      "PipelineAsyncFailure": {
+        "function_name": "${local.name_PipelineFunction}",
+        "qualifier": "${\"live\"}",
+        "maximum_retry_attempts": "${2}",
+        "maximum_event_age_in_seconds": "${3600}",
+        "destination_config": [
+          {
+            "on_failure": [
+              {
+                "destination": "${aws_sqs_queue.IngressFailures.arn}"
+              }
+            ]
+          }
+        ],
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_iam_role.PipelineRole",
+          "aws_lambda_alias.PipelineAlias",
+          "aws_lambda_function.PipelineFunction",
+          "aws_sqs_queue.IngressFailures",
+          "aws_sqs_queue_policy.IngressFailurePolicy"
+        ]
+      },
+      "TerminalAsyncFailure": {
+        "function_name": "${local.name_TerminalFunction}",
+        "qualifier": "${\"live\"}",
+        "maximum_retry_attempts": "${2}",
+        "maximum_event_age_in_seconds": "${3600}",
+        "destination_config": [
+          {
+            "on_failure": [
+              {
+                "destination": "${aws_sqs_queue.TerminalFailures.arn}"
+              }
+            ]
+          }
+        ],
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_iam_role.TerminalRole",
+          "aws_lambda_alias.TerminalAlias",
+          "aws_lambda_function.TerminalFunction",
+          "aws_sqs_queue.TerminalFailures",
+          "aws_sqs_queue_policy.TerminalFailurePolicy"
+        ]
+      },
+      "PublicationReconcilerAsyncFailure": {
+        "function_name": "${local.name_PublicationReconcilerFunction}",
+        "qualifier": "${\"live\"}",
+        "maximum_retry_attempts": "${2}",
+        "maximum_event_age_in_seconds": "${3600}",
+        "destination_config": [
+          {
+            "on_failure": [
+              {
+                "destination": "${aws_sqs_queue.TerminalFailures.arn}"
+              }
+            ]
+          }
+        ],
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_iam_role.PublicationReconcilerRole",
+          "aws_lambda_alias.PublicationReconcilerAlias",
+          "aws_lambda_function.PublicationReconcilerFunction",
+          "aws_sqs_queue.TerminalFailures",
+          "aws_sqs_queue_policy.TerminalFailurePolicy"
+        ]
+      }
+    },
+    "aws_sns_topic_subscription": {
+      "OpsSubscription": {
+        "endpoint": "${aws_lambda_alias.OpsAlias.arn}",
+        "protocol": "${\"lambda\"}",
+        "topic_arn": "${local.parameters[\"OpsTopicArn\"]}",
+        "region": "${var.region}",
+        "depends_on": [
+          "aws_lambda_permission.OpsPermission"
+        ]
+      }
+    },
+    "aws_cloudwatch_metric_alarm": {
+      "PipelineErrors": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"Errors\"}",
+        "namespace": "${\"AWS/Lambda\"}",
+        "period": "${300}",
+        "statistic": "${\"Sum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_PipelineErrors}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"FunctionName\" = local.name_PipelineFunction}}",
+        "region": "${var.region}"
+      },
+      "ApprovalErrors": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"Errors\"}",
+        "namespace": "${\"AWS/Lambda\"}",
+        "period": "${300}",
+        "statistic": "${\"Sum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_ApprovalErrors}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"FunctionName\" = local.name_ApprovalFunction}}",
+        "region": "${var.region}"
+      },
+      "BlockerErrors": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"Errors\"}",
+        "namespace": "${\"AWS/Lambda\"}",
+        "period": "${300}",
+        "statistic": "${\"Sum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_BlockerErrors}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"FunctionName\" = local.name_BlockerFunction}}",
+        "region": "${var.region}"
+      },
+      "TerminalErrors": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"Errors\"}",
+        "namespace": "${\"AWS/Lambda\"}",
+        "period": "${300}",
+        "statistic": "${\"Sum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_TerminalErrors}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"FunctionName\" = local.name_TerminalFunction}}",
+        "region": "${var.region}"
+      },
+      "PublicationReconcilerErrors": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"Errors\"}",
+        "namespace": "${\"AWS/Lambda\"}",
+        "period": "${300}",
+        "statistic": "${\"Sum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_PublicationReconcilerErrors}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"FunctionName\" = local.name_PublicationReconcilerFunction}}",
+        "region": "${var.region}"
+      },
+      "OutboxErrors": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"Errors\"}",
+        "namespace": "${\"AWS/Lambda\"}",
+        "period": "${300}",
+        "statistic": "${\"Sum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_OutboxErrors}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"FunctionName\" = local.name_OutboxFunction}}",
+        "region": "${var.region}"
+      },
+      "NotifierErrors": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"Errors\"}",
+        "namespace": "${\"AWS/Lambda\"}",
+        "period": "${300}",
+        "statistic": "${\"Sum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_NotifierErrors}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"FunctionName\" = local.name_NotifierFunction}}",
+        "region": "${var.region}"
+      },
+      "OpsErrors": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"Errors\"}",
+        "namespace": "${\"AWS/Lambda\"}",
+        "period": "${300}",
+        "statistic": "${\"Sum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_OpsErrors}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"FunctionName\" = local.name_OpsFunction}}",
+        "region": "${var.region}"
+      },
+      "NotificationQueueAge": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"ApproximateAgeOfOldestMessage\"}",
+        "namespace": "${\"AWS/SQS\"}",
+        "period": "${300}",
+        "statistic": "${\"Maximum\"}",
+        "threshold": "${300}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_NotificationQueueAge}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"QueueName\" = local.name_NotificationQueue}}",
+        "region": "${var.region}"
+      },
+      "NotificationFailuresMessages": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"ApproximateNumberOfMessagesVisible\"}",
+        "namespace": "${\"AWS/SQS\"}",
+        "period": "${300}",
+        "statistic": "${\"Maximum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_NotificationFailuresMessages}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"QueueName\" = local.name_NotificationFailures}}",
+        "region": "${var.region}"
+      },
+      "IngressFailuresMessages": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"ApproximateNumberOfMessagesVisible\"}",
+        "namespace": "${\"AWS/SQS\"}",
+        "period": "${300}",
+        "statistic": "${\"Maximum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_IngressFailuresMessages}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"QueueName\" = local.name_IngressFailures}}",
+        "region": "${var.region}"
+      },
+      "TerminalFailuresMessages": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"ApproximateNumberOfMessagesVisible\"}",
+        "namespace": "${\"AWS/SQS\"}",
+        "period": "${300}",
+        "statistic": "${\"Maximum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_TerminalFailuresMessages}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"QueueName\" = local.name_TerminalFailures}}",
+        "region": "${var.region}"
+      },
+      "StreamFailuresMessages": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"ApproximateNumberOfMessagesVisible\"}",
+        "namespace": "${\"AWS/SQS\"}",
+        "period": "${300}",
+        "statistic": "${\"Maximum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_StreamFailuresMessages}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"QueueName\" = local.name_StreamFailures}}",
+        "region": "${var.region}"
+      },
+      "ExecutionsFailed": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"ExecutionsFailed\"}",
+        "namespace": "${\"AWS/States\"}",
+        "period": "${300}",
+        "statistic": "${\"Sum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_ExecutionsFailed}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"StateMachineArn\" = aws_sfn_state_machine.PipelineStateMachine.arn}}",
+        "region": "${var.region}"
+      },
+      "ExecutionsTimedOut": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"ExecutionsTimedOut\"}",
+        "namespace": "${\"AWS/States\"}",
+        "period": "${300}",
+        "statistic": "${\"Sum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_ExecutionsTimedOut}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"StateMachineArn\" = aws_sfn_state_machine.PipelineStateMachine.arn}}",
+        "region": "${var.region}"
+      },
+      "ExecutionsAborted": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"ExecutionsAborted\"}",
+        "namespace": "${\"AWS/States\"}",
+        "period": "${300}",
+        "statistic": "${\"Sum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_ExecutionsAborted}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"StateMachineArn\" = aws_sfn_state_machine.PipelineStateMachine.arn}}",
+        "region": "${var.region}"
+      },
+      "RecoveryPendingExamined": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "datapoints_to_alarm": "${3}",
+        "evaluation_periods": "${3}",
+        "metric_name": "${\"PendingExamined\"}",
+        "namespace": "${\"EnterpriseSecurity/Recovery\"}",
+        "period": "${60}",
+        "statistic": "${\"Maximum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_RecoveryPendingExamined}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"FunctionName\" = local.name_PublicationReconcilerFunction}}",
+        "region": "${var.region}"
+      },
+      "RecoveryDependencyErrors": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "datapoints_to_alarm": "${3}",
+        "evaluation_periods": "${3}",
+        "metric_name": "${\"DependencyErrors\"}",
+        "namespace": "${\"EnterpriseSecurity/Recovery\"}",
+        "period": "${60}",
+        "statistic": "${\"Maximum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_RecoveryDependencyErrors}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"FunctionName\" = local.name_PublicationReconcilerFunction}}",
+        "region": "${var.region}"
+      },
+      "IngressOpsDeliveryErrors": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"FailedInvocations\"}",
+        "namespace": "${\"AWS/Events\"}",
+        "period": "${300}",
+        "statistic": "${\"Sum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_IngressOpsDeliveryErrors}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"RuleName\" = local.name_IngressOpsRule}}",
+        "region": "${var.region}"
+      },
+      "IngressOpsDlqDeliveryErrors": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"InvocationsFailedToBeSentToDlq\"}",
+        "namespace": "${\"AWS/Events\"}",
+        "period": "${300}",
+        "statistic": "${\"Sum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_IngressOpsDlqDeliveryErrors}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"RuleName\" = local.name_IngressOpsRule}}",
+        "region": "${var.region}"
+      },
+      "PipelineAsyncDropped": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"AsyncEventsDropped\"}",
+        "namespace": "${\"AWS/Lambda\"}",
+        "period": "${300}",
+        "statistic": "${\"Sum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_PipelineAsyncDropped}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"FunctionName\" = local.name_PipelineFunction}}",
+        "region": "${var.region}"
+      },
+      "PipelineDestinationFailures": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"DestinationDeliveryFailures\"}",
+        "namespace": "${\"AWS/Lambda\"}",
+        "period": "${300}",
+        "statistic": "${\"Sum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_PipelineDestinationFailures}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"FunctionName\" = local.name_PipelineFunction}}",
+        "region": "${var.region}"
+      },
+      "TerminalAsyncDropped": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"AsyncEventsDropped\"}",
+        "namespace": "${\"AWS/Lambda\"}",
+        "period": "${300}",
+        "statistic": "${\"Sum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_TerminalAsyncDropped}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"FunctionName\" = local.name_TerminalFunction}}",
+        "region": "${var.region}"
+      },
+      "TerminalDestinationFailures": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"DestinationDeliveryFailures\"}",
+        "namespace": "${\"AWS/Lambda\"}",
+        "period": "${300}",
+        "statistic": "${\"Sum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_TerminalDestinationFailures}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"FunctionName\" = local.name_TerminalFunction}}",
+        "region": "${var.region}"
+      },
+      "PublicationReconcilerAsyncDropped": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"AsyncEventsDropped\"}",
+        "namespace": "${\"AWS/Lambda\"}",
+        "period": "${300}",
+        "statistic": "${\"Sum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_PublicationReconcilerAsyncDropped}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"FunctionName\" = local.name_PublicationReconcilerFunction}}",
+        "region": "${var.region}"
+      },
+      "PublicationReconcilerDestinationFailures": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"DestinationDeliveryFailures\"}",
+        "namespace": "${\"AWS/Lambda\"}",
+        "period": "${300}",
+        "statistic": "${\"Sum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_PublicationReconcilerDestinationFailures}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"FunctionName\" = local.name_PublicationReconcilerFunction}}",
+        "region": "${var.region}"
+      },
+      "IngressOpsFailureMessages": {
+        "comparison_operator": "${\"GreaterThanOrEqualToThreshold\"}",
+        "evaluation_periods": "${1}",
+        "metric_name": "${\"ApproximateNumberOfMessagesVisible\"}",
+        "namespace": "${\"AWS/SQS\"}",
+        "period": "${300}",
+        "statistic": "${\"Maximum\"}",
+        "threshold": "${1}",
+        "treat_missing_data": "${\"notBreaching\"}",
+        "alarm_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "ok_actions": "${[local.parameters[\"OpsTopicArn\"]]}",
+        "alarm_name": "${local.name_IngressOpsFailureMessages}",
+        "tags": "${merge({}, {ManagedBy = \"enterprise-security\", InstallationId = var.installation_id})}",
+        "dimensions": "${{\"QueueName\" = local.name_IngressOpsFailures}}",
+        "region": "${var.region}"
+      }
+    }
+  }
+}

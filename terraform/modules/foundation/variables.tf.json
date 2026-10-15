@@ -1,0 +1,30 @@
+{
+  "variable": {
+    "parameters": {
+      "type": "any",
+      "description": "Reviewed CloudFormation-compatible parameter keys; this module creates native AWS resources.",
+      "validation": [
+        {
+          "condition": "${alltrue([for key in [\"DashboardCodeBucket\", \"DashboardCodeKey\", \"DiscoveryCodeBucket\", \"DiscoveryCodeKey\", \"DiscoveryRegions\"] : contains(keys(var.parameters), key)])}",
+          "error_message": "Missing required platform parameters."
+        }
+      ]
+    },
+    "region": {
+      "type": "string"
+    },
+    "account_id": {
+      "type": "string"
+    },
+    "stack_name": {
+      "type": "string"
+    },
+    "installation_id": {
+      "type": "string"
+    },
+    "physical_names": {
+      "type": "map(string)",
+      "default": {}
+    }
+  }
+}

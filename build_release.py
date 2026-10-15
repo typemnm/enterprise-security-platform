@@ -38,6 +38,32 @@ def digest(data):
     return {"sha256": raw.hex(), "code_sha256": base64.b64encode(raw).decode(), "size": len(data)}
 
 
+def terraform_inventory(root=None):
+    """Hash reviewed deploy source, never state, provider caches or company input."""
+    root = Path(root) if root is not None else ROOT
+    directory = root / "terraform"
+    if not directory.is_dir() or not (directory / ".terraform.lock.hcl").is_file():
+        raise ValueError("TERRAFORM_PROVIDER_LOCK_REQUIRED")
+    spec = importlib.util.spec_from_file_location("release_publication_guard", root / "tools/publication_check.py")
+    guard = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(guard)
+    paths = []
+    for base, folders, files in os.walk(directory, followlinks=False):
+        base = Path(base)
+        for name in list(folders):
+            candidate = base / name
+            if candidate.is_symlink() or getattr(candidate, "is_junction", lambda: False)():
+                raise ValueError("TERRAFORM_SOURCE_SYMLINK_PROHIBITED")
+            if name == ".terraform":
+                folders.remove(name)
+        for name in files:
+            path = base / name
+            if path.is_symlink() or not guard.allowed_source(path.relative_to(root).as_posix()):
+                raise ValueError("UNREVIEWED_TERRAFORM_SOURCE")
+            paths.append(path)
+    return sorted(paths)
+
+
 def test_result(name, output, node=False):
     if node:
         counts = {field: re.search(r"# " + field + r"\s+(\d+)", output) for field in ["tests", "pass", "fail"]}
@@ -220,9 +246,11 @@ def build(build_archives):
     for path in paths:
         manifest["source_files"]["runtime/" + path.name] = digest(path.read_bytes())["sha256"]
     for path in [ROOT / "build_release.py", ROOT / "install.py", ROOT / "sdk_packaging.py", ROOT / "node_packaging.py", ROOT / sdk_packaging.LOCK_NAME,
-                 *(ROOT / "service-onboarding").glob("*"), *dashboard.glob("*")]:
+                 *(ROOT / "service-onboarding").glob("*"), *(ROOT / "tools").glob("*.py"), *dashboard.glob("*")]:
         if path.is_file() and path.suffix in {".py", ".json", ".js", ".txt", ".html", ".css"}:
             manifest["source_files"][path.relative_to(ROOT).as_posix()] = digest(path.read_bytes())["sha256"]
+    for path in terraform_inventory():
+        manifest["source_files"][path.relative_to(ROOT).as_posix()] = digest(path.read_bytes())["sha256"]
     for path in templates:
         manifest["templates"][path.name] = digest(path.read_bytes())
     if build_archives:
