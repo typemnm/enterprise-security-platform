@@ -52,6 +52,28 @@ class PublicationTests(unittest.TestCase):
                 payload, metadata = self.parser_fixture(changed)
                 findings = archive_findings(payload, kind="dashboard", node_metadata=metadata)
                 self.assertEqual([row["code"] for row in findings], ["PRIVATE_KEY_LITERAL"])
+    def test_public_sdk_placeholder_requires_exact_path_version_and_original_hash(self):
+        path = "botocore/data/iam/2010-05-08/examples-1.json"
+        body = json.dumps({"PrivateKey": "-----BEGIN " + "RSA PRIVATE KEY-----\n<a very long private key string>\n-----END " + "RSA PRIVATE KEY-----"}).encode()
+        checksum = hashlib.sha256(body).hexdigest()
+        expected = {"package": "botocore", "version": "1.43.113", "sha256": checksum}
+        versions = {"botocore": "1.43.113"}
+        with patch.dict(publication_check.PUBLIC_SDK_EXAMPLES, {path: expected}, clear=True):
+            self.assertEqual(archive_findings(archive({path: body}), kind="runtime", sdk_files={path: checksum}, sdk_versions=versions), [])
+            self.assertFalse(publication_check.public_sdk_example(path + ".copy", body, versions))
+            self.assertFalse(publication_check.public_sdk_example(path, body, {"botocore": "1.43.114"}))
+            self.assertFalse(publication_check.public_sdk_example(path, body, {}))
+            self.assertTrue(archive_findings(archive({path: body}), kind="runtime", sdk_files={path: checksum}))
+    def test_public_sdk_placeholder_rejects_mutation_and_added_key_body_even_if_manifest_is_rehashed(self):
+        path = "botocore/data/iam/2010-05-08/examples-1.json"
+        body = json.dumps({"PrivateKey": "-----BEGIN " + "RSA PRIVATE KEY-----\n<a very long private key string>\n-----END " + "RSA PRIVATE KEY-----"}).encode()
+        expected = {"package": "botocore", "version": "1.43.113", "sha256": hashlib.sha256(body).hexdigest()}
+        fake_key = "-----BEGIN " + "PRIVATE KEY-----\n" + "A" * 100 + "\n-----END " + "PRIVATE KEY-----"
+        with patch.dict(publication_check.PUBLIC_SDK_EXAMPLES, {path: expected}, clear=True):
+            for changed in (body + b'\n ', json.dumps({"PrivateKey": fake_key}).encode()):
+                checksum = hashlib.sha256(changed).hexdigest()
+                findings = archive_findings(archive({path: changed}), kind="runtime", sdk_files={path: checksum}, sdk_versions={"botocore": "1.43.113"})
+                self.assertEqual([row["code"] for row in findings], ["PRIVATE_KEY_LITERAL"])
     def test_source_allowlist_never_accepts_generated_or_company_files(self):
         self.assertTrue(allowed_source("runtime/blocker.py"))
         self.assertTrue(allowed_source("service-onboarding/installation.example.json"))

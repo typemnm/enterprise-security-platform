@@ -47,6 +47,14 @@ PUBLIC_VENDOR_PARSERS = {
         "sha256": "ab2f57a9db99e8d48451a8d0a8adf75379381f65b0e3e28ba6c02aa5bb3ee5fa",
     },
 }
+# This exact SDK example contains a literal placeholder, not private key data.
+# Wheel/lock provenance and the individual file hash remain mandatory.
+PUBLIC_SDK_EXAMPLES = {
+    "botocore/data/iam/2010-05-08/examples-1.json": {
+        "package": "botocore", "version": "1.43.113",
+        "sha256": "4f912aac51590625652fd76c37e4f90e78a05355273125df555c012b4d005ab5",
+    },
+}
 
 
 def safe_relative(name):
@@ -160,7 +168,13 @@ def public_vendor_parser(name, body, node_packages):
                 and hashlib.sha256(body).hexdigest() == expected["sha256"])
 
 
-def archive_findings(body, *, kind="deploy", prefix="", depth=0, sdk_files=None, node_metadata=None):
+def public_sdk_example(name, body, sdk_versions):
+    expected = PUBLIC_SDK_EXAMPLES.get(name)
+    return bool(expected and (sdk_versions or {}).get(expected["package"]) == expected["version"]
+                and hashlib.sha256(body).hexdigest() == expected["sha256"])
+
+
+def archive_findings(body, *, kind="deploy", prefix="", depth=0, sdk_files=None, sdk_versions=None, node_metadata=None):
     findings = []
     if depth > 1: return [{"path": prefix, "code": "NESTED_ARCHIVE_LIMIT"}]
     try:
@@ -174,6 +188,7 @@ def archive_findings(body, *, kind="deploy", prefix="", depth=0, sdk_files=None,
                 if manifest_name:
                     manifest = json.loads(archive.read(manifest_name))
                     sdk_files = manifest.get("runtime_sdk", {}).get("files", {})
+                    sdk_versions = manifest.get("runtime_sdk", {}).get("versions", {})
                     node_metadata = manifest.get("node_dependencies", {})
             node_packages = {}
             node_files, found_node_files = {}, set()
@@ -204,7 +219,7 @@ def archive_findings(body, *, kind="deploy", prefix="", depth=0, sdk_files=None,
                         findings.append({"path": label, "code": "UPLOAD_MEMBER_NOT_ALLOWED"}); continue
                     content = archive.read(row)
                     if name in {"build/release/runtime.zip", "build/release/dashboard.zip"}:
-                        findings.extend(archive_findings(content, kind="runtime" if name.endswith("runtime.zip") else "dashboard", prefix=label + "!", depth=depth + 1, sdk_files=sdk_files, node_metadata=node_metadata))
+                        findings.extend(archive_findings(content, kind="runtime" if name.endswith("runtime.zip") else "dashboard", prefix=label + "!", depth=depth + 1, sdk_files=sdk_files, sdk_versions=sdk_versions, node_metadata=node_metadata))
                     else: findings.extend(content_findings(name, content))
                 elif vendor_member(name, kind):
                     # Original dependency copyrights, author contacts and SDK
@@ -226,7 +241,8 @@ def archive_findings(body, *, kind="deploy", prefix="", depth=0, sdk_files=None,
                     # SDK config/logs models and public CA certificates are
                     # legitimate pinned vendor files, not company configuration.
                     if (PRIVATE_KEY.search(vendor_body.decode("utf-8", errors="ignore"))
-                            and not (kind == "dashboard" and public_vendor_parser(name, vendor_body, node_packages))):
+                            and not (kind == "dashboard" and public_vendor_parser(name, vendor_body, node_packages))
+                            and not (kind == "runtime" and public_sdk_example(name, vendor_body, sdk_versions))):
                         findings.append({"path": label, "code": "PRIVATE_KEY_LITERAL"})
                 else:
                     allowed = (kind == "runtime" and (re.fullmatch(r"runtime/[A-Za-z_][A-Za-z0-9_]*\.py", name) or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*\.py", name))
