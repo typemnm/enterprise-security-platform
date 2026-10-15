@@ -1,0 +1,4918 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Enterprise governance: scoped HOTL/HITL, private approval callbacks, durable report delivery and operational alarms.",
+  "Parameters": {
+    "RuntimeCodeBucket": {
+      "Type": "String"
+    },
+    "RuntimeCodeKey": {
+      "Type": "String"
+    },
+    "RuntimeCodeVersion": {
+      "Type": "String",
+      "MinLength": 1,
+      "Description": "S3 object version for the reviewed immutable runtime ZIP"
+    },
+    "RuntimeCodeSha256": {
+      "Type": "String",
+      "AllowedPattern": "[A-Za-z0-9+/]{43}=",
+      "Description": "Base64 SHA-256 checked again when publishing each Lambda version"
+    },
+    "RegistryTableName": {
+      "Type": "String"
+    },
+    "RegistryTableArn": {
+      "Type": "String"
+    },
+    "CasesTableName": {
+      "Type": "String"
+    },
+    "CasesTableArn": {
+      "Type": "String"
+    },
+    "CasesTableStreamArn": {
+      "Type": "String"
+    },
+    "OperationsTableName": {
+      "Type": "String"
+    },
+    "OperationsTableArn": {
+      "Type": "String"
+    },
+    "LeaseTableName": {
+      "Type": "String"
+    },
+    "LeaseTableArn": {
+      "Type": "String"
+    },
+    "ExpectedActivityTableName": {
+      "Type": "String"
+    },
+    "ExpectedActivityTableArn": {
+      "Type": "String"
+    },
+    "ReceiptTableName": {
+      "Type": "String"
+    },
+    "ReceiptTableArn": {
+      "Type": "String"
+    },
+    "AuditBucketName": {
+      "Type": "String"
+    },
+    "AuditBucketArn": {
+      "Type": "String"
+    },
+    "AuditKeyArn": {
+      "Type": "String"
+    },
+    "SecurityEventBusName": {
+      "Type": "String"
+    },
+    "SecurityEventBusArn": {
+      "Type": "String"
+    },
+    "OpsTopicArn": {
+      "Type": "String"
+    },
+    "OpsKeyArn": {
+      "Type": "String"
+    },
+    "InstallationId": {
+      "Type": "String",
+      "AllowedPattern": "[a-z][a-z0-9-]{2,30}",
+      "Description": "Exact owning foundation installation ID; installer verifies its output"
+    },
+    "DashboardFunctionArn": {
+      "Type": "String"
+    },
+    "DashboardRoleArn": {
+      "Type": "String"
+    },
+    "IngressAlarmNames": {
+      "Type": "CommaDelimitedList",
+      "AllowedPattern": "[a-z][a-z0-9-]{2,30}-[a-z]{2}(?:-[a-z]+)+-[0-9]-log-ingress-(?:errors|async-dropped|destination-failures|dlq-depth)",
+      "Description": "Installer computes the four exact owned log-ingress alarm names for each installed resource region"
+    },
+    "RuntimeConfigRevision": {
+      "Type": "String",
+      "Default": "1",
+      "AllowedPattern": "[A-Za-z0-9_.-]{1,64}",
+      "Description": "Installer hashes effective environment configuration; publishes a new retained version on configuration changes"
+    },
+    "Environment": {
+      "Type": "String",
+      "Default": "prod",
+      "AllowedPattern": "[a-z][a-z0-9-]{1,15}"
+    },
+    "DefaultDryRun": {
+      "Type": "String",
+      "Default": "true",
+      "AllowedValues": [
+        "true",
+        "false"
+      ]
+    },
+    "LogRetentionDays": {
+      "Type": "Number",
+      "Default": 90,
+      "AllowedValues": [
+        30,
+        60,
+        90,
+        180,
+        365
+      ]
+    },
+    "SlackSecretArn": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "|arn:aws(?:-us-gov|-cn)?:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:[A-Za-z0-9/_+=.@-]+"
+    },
+    "SlackChannelId": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "|[CG][A-Z0-9]{8,}"
+    },
+    "SlackSecretKeyArn": {
+      "Type": "String",
+      "Default": "",
+      "Description": "Optional customer KMS key of the configured Slack secret"
+    },
+    "ModelArn": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "|arn:aws(?:-us-gov|-cn)?:bedrock:[a-z0-9-]+:(?:[0-9]{12})?:[A-Za-z0-9_./:-]+"
+    },
+    "NaclResponseEnabled": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "true",
+        "false"
+      ],
+      "Description": "Optional IAM capability; each service still requires explicit NACL policy and reserved slots"
+    }
+  },
+  "Conditions": {
+    "SlackConfigured": {
+      "Fn::And": [
+        {
+          "Fn::Not": [
+            {
+              "Fn::Equals": [
+                {
+                  "Ref": "SlackSecretArn"
+                },
+                ""
+              ]
+            }
+          ]
+        },
+        {
+          "Fn::Not": [
+            {
+              "Fn::Equals": [
+                {
+                  "Ref": "SlackChannelId"
+                },
+                ""
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "SlackCustomerKey": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "SlackSecretKeyArn"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "ModelConfigured": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "ModelArn"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "NaclResponse": {
+      "Fn::Equals": [
+        {
+          "Ref": "NaclResponseEnabled"
+        },
+        "true"
+      ]
+    }
+  },
+  "Resources": {
+    "PipelineLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/enterprise/security/${AWS::StackName}/pipeline"
+        },
+        "RetentionInDays": {
+          "Ref": "LogRetentionDays"
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "PipelineRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "sts:AssumeRole",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ScopedRuntime",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${PipelineLogs.Arn}:*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem"
+                  ],
+                  "Resource": {
+                    "Ref": "CasesTableArn"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "dynamodb:GetItem",
+                  "Resource": {
+                    "Ref": "RegistryTableArn"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "s3:PutObject",
+                  "Resource": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        {
+                          "Ref": "AuditBucketArn"
+                        },
+                        "/*/inv-*.md"
+                      ]
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:GenerateDataKey",
+                    "kms:Decrypt"
+                  ],
+                  "Resource": {
+                    "Ref": "AuditKeyArn"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "dynamodb:GetItem",
+                  "Resource": [
+                    {
+                      "Ref": "OperationsTableArn"
+                    },
+                    {
+                      "Ref": "LeaseTableArn"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "states:StartExecution",
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${AWS::StackName}-pipeline"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "states:DescribeExecution",
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:execution:${AWS::StackName}-pipeline:inv-*"
+                  }
+                },
+                {
+                  "Fn::If": [
+                    "ModelConfigured",
+                    {
+                      "Effect": "Allow",
+                      "Action": "bedrock:InvokeModel",
+                      "Resource": {
+                        "Ref": "ModelArn"
+                      }
+                    },
+                    {
+                      "Ref": "AWS::NoValue"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "sqs:SendMessage",
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "IngressFailures",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:GenerateDataKey",
+                    "kms:Decrypt"
+                  ],
+                  "Resource": {
+                    "Ref": "OpsKeyArn"
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "kms:ViaService": {
+                        "Fn::Sub": "sqs.${AWS::Region}.${AWS::URLSuffix}"
+                      },
+                      "kms:CallerAccount": {
+                        "Ref": "AWS::AccountId"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "PipelineFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${AWS::StackName}-pipeline"
+        },
+        "Runtime": "python3.13",
+        "Handler": "runtime.case_pipeline.handler",
+        "Description": {
+          "Fn::Sub": "Reviewed configuration revision ${RuntimeConfigRevision}"
+        },
+        "Timeout": 120,
+        "MemorySize": 512,
+        "Role": {
+          "Fn::GetAtt": [
+            "PipelineRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "S3Bucket": {
+            "Ref": "RuntimeCodeBucket"
+          },
+          "S3Key": {
+            "Ref": "RuntimeCodeKey"
+          },
+          "S3ObjectVersion": {
+            "Ref": "RuntimeCodeVersion"
+          }
+        },
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "PipelineLogs"
+          },
+          "LogFormat": "JSON"
+        },
+        "Environment": {
+          "Variables": {
+            "EXPECTED_ACCOUNT": {
+              "Ref": "AWS::AccountId"
+            },
+            "REGISTRY_TABLE": {
+              "Ref": "RegistryTableName"
+            },
+            "CASES_TABLE": {
+              "Ref": "CasesTableName"
+            },
+            "OPERATIONS_TABLE": {
+              "Ref": "OperationsTableName"
+            },
+            "LEASE_TABLE": {
+              "Ref": "LeaseTableName"
+            },
+            "MODEL_ARN": {
+              "Ref": "ModelArn"
+            },
+            "PIPELINE_STATE_MACHINE_ARN": {
+              "Fn::Sub": "arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${AWS::StackName}-pipeline"
+            },
+            "DEFAULT_DRY_RUN": {
+              "Ref": "DefaultDryRun"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "PipelineVersion": {
+      "Type": "AWS::Lambda::Version",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "PipelineFunction"
+        },
+        "CodeSha256": {
+          "Ref": "RuntimeCodeSha256"
+        },
+        "Description": {
+          "Fn::Sub": "${RuntimeCodeSha256}:${RuntimeConfigRevision}"
+        }
+      }
+    },
+    "PipelineAlias": {
+      "Type": "AWS::Lambda::Alias",
+      "Properties": {
+        "Name": "live",
+        "FunctionName": {
+          "Ref": "PipelineFunction"
+        },
+        "FunctionVersion": {
+          "Fn::GetAtt": [
+            "PipelineVersion",
+            "Version"
+          ]
+        }
+      }
+    },
+    "ApprovalLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/enterprise/security/${AWS::StackName}/approval"
+        },
+        "RetentionInDays": {
+          "Ref": "LogRetentionDays"
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "ApprovalRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "sts:AssumeRole",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ScopedRuntime",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${ApprovalLogs.Arn}:*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem"
+                  ],
+                  "Resource": {
+                    "Ref": "CasesTableArn"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "dynamodb:GetItem",
+                  "Resource": {
+                    "Ref": "RegistryTableArn"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "states:SendTaskSuccess",
+                  "Resource": "*",
+                  "Condition": {
+                    "ArnEquals": {
+                      "lambda:SourceFunctionArn": {
+                        "Fn::Sub": "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-approval"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "ApprovalFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${AWS::StackName}-approval"
+        },
+        "Runtime": "python3.13",
+        "Handler": "runtime.approval.handler",
+        "Description": {
+          "Fn::Sub": "Reviewed configuration revision ${RuntimeConfigRevision}"
+        },
+        "Timeout": 30,
+        "MemorySize": 256,
+        "Role": {
+          "Fn::GetAtt": [
+            "ApprovalRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "S3Bucket": {
+            "Ref": "RuntimeCodeBucket"
+          },
+          "S3Key": {
+            "Ref": "RuntimeCodeKey"
+          },
+          "S3ObjectVersion": {
+            "Ref": "RuntimeCodeVersion"
+          }
+        },
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "ApprovalLogs"
+          },
+          "LogFormat": "JSON"
+        },
+        "Environment": {
+          "Variables": {
+            "EXPECTED_ACCOUNT": {
+              "Ref": "AWS::AccountId"
+            },
+            "REGISTRY_TABLE": {
+              "Ref": "RegistryTableName"
+            },
+            "CASES_TABLE": {
+              "Ref": "CasesTableName"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "ApprovalVersion": {
+      "Type": "AWS::Lambda::Version",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "ApprovalFunction"
+        },
+        "CodeSha256": {
+          "Ref": "RuntimeCodeSha256"
+        },
+        "Description": {
+          "Fn::Sub": "${RuntimeCodeSha256}:${RuntimeConfigRevision}"
+        }
+      }
+    },
+    "ApprovalAlias": {
+      "Type": "AWS::Lambda::Alias",
+      "Properties": {
+        "Name": "live",
+        "FunctionName": {
+          "Ref": "ApprovalFunction"
+        },
+        "FunctionVersion": {
+          "Fn::GetAtt": [
+            "ApprovalVersion",
+            "Version"
+          ]
+        }
+      }
+    },
+    "BlockerLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/enterprise/security/${AWS::StackName}/blocker"
+        },
+        "RetentionInDays": {
+          "Ref": "LogRetentionDays"
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "BlockerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "sts:AssumeRole",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ScopedRuntime",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${BlockerLogs.Arn}:*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "dynamodb:GetItem",
+                  "Resource": {
+                    "Ref": "RegistryTableArn"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "dynamodb:GetItem",
+                  "Resource": {
+                    "Ref": "CasesTableArn"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem"
+                  ],
+                  "Resource": {
+                    "Ref": "OperationsTableArn"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:DeleteItem"
+                  ],
+                  "Resource": {
+                    "Ref": "LeaseTableArn"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "wafv2:GetIPSet",
+                    "wafv2:UpdateIPSet"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:wafv2:*:${AWS::AccountId}:*/ipset/security-*/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "wafv2:GetWebACLForResource",
+                    "wafv2:GetWebACL",
+                    "wafv2:ListResourcesForWebACL"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:wafv2:*:${AWS::AccountId}:*/webacl/*/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "cloudfront:GetDistributionConfig",
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudfront:ListDistributionsByWebACLId",
+                    "cloudfront:ListDistributionTenantsByCustomization",
+                    "elasticloadbalancing:DescribeWebACLAssociation",
+                    "appsync:ListResourcesForWebACL",
+                    "amplify:ListResourcesForWebACL",
+                    "bedrock-agentcore:GatewayListResourcesForWebACL",
+                    "ec2:DescribeVerifiedAccessInstanceWebAclAssociations"
+                  ],
+                  "Resource": "*",
+                  "Condition": {
+                    "ArnEquals": {
+                      "lambda:SourceFunctionArn": {
+                        "Fn::Sub": "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-blocker"
+                      }
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "elasticloadbalancing:GetLoadBalancerWebACL",
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:elasticloadbalancing:*:${AWS::AccountId}:loadbalancer/app/*/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cognito-idp:ListResourcesForWebACL",
+                    "apprunner:ListAssociatedServicesForWebAcl"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:wafv2:*:${AWS::AccountId}:*/webacl/*/*"
+                  }
+                },
+                {
+                  "Fn::If": [
+                    "NaclResponse",
+                    {
+                      "Effect": "Allow",
+                      "Action": "ec2:DescribeNetworkAcls",
+                      "Resource": "*"
+                    },
+                    {
+                      "Ref": "AWS::NoValue"
+                    }
+                  ]
+                },
+                {
+                  "Fn::If": [
+                    "NaclResponse",
+                    {
+                      "Effect": "Allow",
+                      "Action": "ec2:ReplaceNetworkAclEntry",
+                      "Resource": {
+                        "Fn::Sub": "arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:network-acl/*"
+                      }
+                    },
+                    {
+                      "Ref": "AWS::NoValue"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "BlockerFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${AWS::StackName}-blocker"
+        },
+        "Runtime": "python3.13",
+        "Handler": "runtime.blocker.handler",
+        "Description": {
+          "Fn::Sub": "Reviewed configuration revision ${RuntimeConfigRevision}"
+        },
+        "Timeout": 150,
+        "MemorySize": 256,
+        "Role": {
+          "Fn::GetAtt": [
+            "BlockerRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "S3Bucket": {
+            "Ref": "RuntimeCodeBucket"
+          },
+          "S3Key": {
+            "Ref": "RuntimeCodeKey"
+          },
+          "S3ObjectVersion": {
+            "Ref": "RuntimeCodeVersion"
+          }
+        },
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "BlockerLogs"
+          },
+          "LogFormat": "JSON"
+        },
+        "Environment": {
+          "Variables": {
+            "EXPECTED_ACCOUNT": {
+              "Ref": "AWS::AccountId"
+            },
+            "REGISTRY_TABLE": {
+              "Ref": "RegistryTableName"
+            },
+            "CASES_TABLE": {
+              "Ref": "CasesTableName"
+            },
+            "OPERATIONS_TABLE": {
+              "Ref": "OperationsTableName"
+            },
+            "LEASE_TABLE": {
+              "Ref": "LeaseTableName"
+            },
+            "DEFAULT_DRY_RUN": {
+              "Ref": "DefaultDryRun"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "BlockerVersion": {
+      "Type": "AWS::Lambda::Version",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "BlockerFunction"
+        },
+        "CodeSha256": {
+          "Ref": "RuntimeCodeSha256"
+        },
+        "Description": {
+          "Fn::Sub": "${RuntimeCodeSha256}:${RuntimeConfigRevision}"
+        }
+      }
+    },
+    "BlockerAlias": {
+      "Type": "AWS::Lambda::Alias",
+      "Properties": {
+        "Name": "live",
+        "FunctionName": {
+          "Ref": "BlockerFunction"
+        },
+        "FunctionVersion": {
+          "Fn::GetAtt": [
+            "BlockerVersion",
+            "Version"
+          ]
+        }
+      }
+    },
+    "TerminalLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/enterprise/security/${AWS::StackName}/terminal"
+        },
+        "RetentionInDays": {
+          "Ref": "LogRetentionDays"
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "TerminalRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "sts:AssumeRole",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ScopedRuntime",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${TerminalLogs.Arn}:*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem"
+                  ],
+                  "Resource": {
+                    "Ref": "CasesTableArn"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "dynamodb:GetItem",
+                  "Resource": {
+                    "Ref": "RegistryTableArn"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "s3:PutObject",
+                  "Resource": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        {
+                          "Ref": "AuditBucketArn"
+                        },
+                        "/*/inv-*.md"
+                      ]
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:GenerateDataKey",
+                    "kms:Decrypt"
+                  ],
+                  "Resource": {
+                    "Ref": "AuditKeyArn"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "states:DescribeExecution",
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:execution:${AWS::StackName}-pipeline:inv-*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "sqs:SendMessage",
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "TerminalFailures",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:GenerateDataKey",
+                    "kms:Decrypt"
+                  ],
+                  "Resource": {
+                    "Ref": "OpsKeyArn"
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "kms:ViaService": {
+                        "Fn::Sub": "sqs.${AWS::Region}.${AWS::URLSuffix}"
+                      },
+                      "kms:CallerAccount": {
+                        "Ref": "AWS::AccountId"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "TerminalFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${AWS::StackName}-terminal"
+        },
+        "Runtime": "python3.13",
+        "Handler": "runtime.terminal.handler",
+        "Description": {
+          "Fn::Sub": "Reviewed configuration revision ${RuntimeConfigRevision}"
+        },
+        "Timeout": 120,
+        "MemorySize": 256,
+        "Role": {
+          "Fn::GetAtt": [
+            "TerminalRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "S3Bucket": {
+            "Ref": "RuntimeCodeBucket"
+          },
+          "S3Key": {
+            "Ref": "RuntimeCodeKey"
+          },
+          "S3ObjectVersion": {
+            "Ref": "RuntimeCodeVersion"
+          }
+        },
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "TerminalLogs"
+          },
+          "LogFormat": "JSON"
+        },
+        "Environment": {
+          "Variables": {
+            "EXPECTED_ACCOUNT": {
+              "Ref": "AWS::AccountId"
+            },
+            "REGISTRY_TABLE": {
+              "Ref": "RegistryTableName"
+            },
+            "CASES_TABLE": {
+              "Ref": "CasesTableName"
+            },
+            "PIPELINE_STATE_MACHINE_ARN": {
+              "Fn::Sub": "arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${AWS::StackName}-pipeline"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "TerminalVersion": {
+      "Type": "AWS::Lambda::Version",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "TerminalFunction"
+        },
+        "CodeSha256": {
+          "Ref": "RuntimeCodeSha256"
+        },
+        "Description": {
+          "Fn::Sub": "${RuntimeCodeSha256}:${RuntimeConfigRevision}"
+        }
+      }
+    },
+    "TerminalAlias": {
+      "Type": "AWS::Lambda::Alias",
+      "Properties": {
+        "Name": "live",
+        "FunctionName": {
+          "Ref": "TerminalFunction"
+        },
+        "FunctionVersion": {
+          "Fn::GetAtt": [
+            "TerminalVersion",
+            "Version"
+          ]
+        }
+      }
+    },
+    "PublicationReconcilerLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/enterprise/security/${AWS::StackName}/publicationreconciler"
+        },
+        "RetentionInDays": {
+          "Ref": "LogRetentionDays"
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "PublicationReconcilerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "sts:AssumeRole",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ScopedRuntime",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${PublicationReconcilerLogs.Arn}:*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem"
+                  ],
+                  "Resource": {
+                    "Ref": "CasesTableArn"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "dynamodb:Query",
+                  "Resource": [
+                    {
+                      "Fn::Join": [
+                        "",
+                        [
+                          {
+                            "Ref": "CasesTableArn"
+                          },
+                          "/index/PublicationStateIndex"
+                        ]
+                      ]
+                    },
+                    {
+                      "Fn::Join": [
+                        "",
+                        [
+                          {
+                            "Ref": "CasesTableArn"
+                          },
+                          "/index/NotificationStateIndex"
+                        ]
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "s3:PutObject",
+                  "Resource": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        {
+                          "Ref": "AuditBucketArn"
+                        },
+                        "/*/inv-*.md"
+                      ]
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:GenerateDataKey",
+                    "kms:Decrypt"
+                  ],
+                  "Resource": {
+                    "Ref": "AuditKeyArn"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "events:PutEvents",
+                  "Resource": {
+                    "Ref": "SecurityEventBusArn"
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "events:source": "whs.hitl.dashboard",
+                      "events:detail-type": "DashboardReportPublished.v1"
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "cloudwatch:PutMetricData",
+                  "Resource": "*",
+                  "Condition": {
+                    "StringEquals": {
+                      "cloudwatch:namespace": "EnterpriseSecurity/Recovery"
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "sqs:SendMessage",
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "TerminalFailures",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:GenerateDataKey",
+                    "kms:Decrypt"
+                  ],
+                  "Resource": {
+                    "Ref": "OpsKeyArn"
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "kms:ViaService": {
+                        "Fn::Sub": "sqs.${AWS::Region}.${AWS::URLSuffix}"
+                      },
+                      "kms:CallerAccount": {
+                        "Ref": "AWS::AccountId"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "PublicationReconcilerFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${AWS::StackName}-publicationreconciler"
+        },
+        "Runtime": "python3.13",
+        "Handler": "runtime.publication_reconciler.handler",
+        "Description": {
+          "Fn::Sub": "Reviewed configuration revision ${RuntimeConfigRevision}"
+        },
+        "Timeout": 120,
+        "MemorySize": 256,
+        "Role": {
+          "Fn::GetAtt": [
+            "PublicationReconcilerRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "S3Bucket": {
+            "Ref": "RuntimeCodeBucket"
+          },
+          "S3Key": {
+            "Ref": "RuntimeCodeKey"
+          },
+          "S3ObjectVersion": {
+            "Ref": "RuntimeCodeVersion"
+          }
+        },
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "PublicationReconcilerLogs"
+          },
+          "LogFormat": "JSON"
+        },
+        "Environment": {
+          "Variables": {
+            "CASES_TABLE": {
+              "Ref": "CasesTableName"
+            },
+            "NOTIFICATION_BUS": {
+              "Ref": "SecurityEventBusName"
+            },
+            "PUBLICATION_INDEX": "PublicationStateIndex",
+            "NOTIFICATION_INDEX": "NotificationStateIndex",
+            "RECONCILE_BATCH_SIZE": "25"
+          }
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ],
+        "ReservedConcurrentExecutions": 1
+      }
+    },
+    "PublicationReconcilerVersion": {
+      "Type": "AWS::Lambda::Version",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "PublicationReconcilerFunction"
+        },
+        "CodeSha256": {
+          "Ref": "RuntimeCodeSha256"
+        },
+        "Description": {
+          "Fn::Sub": "${RuntimeCodeSha256}:${RuntimeConfigRevision}"
+        }
+      }
+    },
+    "PublicationReconcilerAlias": {
+      "Type": "AWS::Lambda::Alias",
+      "Properties": {
+        "Name": "live",
+        "FunctionName": {
+          "Ref": "PublicationReconcilerFunction"
+        },
+        "FunctionVersion": {
+          "Fn::GetAtt": [
+            "PublicationReconcilerVersion",
+            "Version"
+          ]
+        }
+      }
+    },
+    "OutboxLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/enterprise/security/${AWS::StackName}/outbox"
+        },
+        "RetentionInDays": {
+          "Ref": "LogRetentionDays"
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "OutboxRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "sts:AssumeRole",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ScopedRuntime",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${OutboxLogs.Arn}:*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem"
+                  ],
+                  "Resource": {
+                    "Ref": "CasesTableArn"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "events:PutEvents",
+                  "Resource": {
+                    "Ref": "SecurityEventBusArn"
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "events:source": "whs.hitl.dashboard",
+                      "events:detail-type": "DashboardReportPublished.v1"
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:DescribeStream",
+                    "dynamodb:GetRecords",
+                    "dynamodb:GetShardIterator",
+                    "dynamodb:ListStreams"
+                  ],
+                  "Resource": {
+                    "Ref": "CasesTableStreamArn"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "sqs:SendMessage",
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "StreamFailures",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:GenerateDataKey",
+                    "kms:Decrypt"
+                  ],
+                  "Resource": {
+                    "Ref": "OpsKeyArn"
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "kms:ViaService": {
+                        "Fn::Sub": "sqs.${AWS::Region}.${AWS::URLSuffix}"
+                      },
+                      "kms:CallerAccount": {
+                        "Ref": "AWS::AccountId"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "OutboxFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${AWS::StackName}-outbox"
+        },
+        "Runtime": "python3.13",
+        "Handler": "runtime.outbox_delivery.handler",
+        "Description": {
+          "Fn::Sub": "Reviewed configuration revision ${RuntimeConfigRevision}"
+        },
+        "Timeout": 60,
+        "MemorySize": 256,
+        "Role": {
+          "Fn::GetAtt": [
+            "OutboxRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "S3Bucket": {
+            "Ref": "RuntimeCodeBucket"
+          },
+          "S3Key": {
+            "Ref": "RuntimeCodeKey"
+          },
+          "S3ObjectVersion": {
+            "Ref": "RuntimeCodeVersion"
+          }
+        },
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "OutboxLogs"
+          },
+          "LogFormat": "JSON"
+        },
+        "Environment": {
+          "Variables": {
+            "CASES_TABLE": {
+              "Ref": "CasesTableName"
+            },
+            "NOTIFICATION_BUS": {
+              "Ref": "SecurityEventBusName"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "OutboxVersion": {
+      "Type": "AWS::Lambda::Version",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "OutboxFunction"
+        },
+        "CodeSha256": {
+          "Ref": "RuntimeCodeSha256"
+        },
+        "Description": {
+          "Fn::Sub": "${RuntimeCodeSha256}:${RuntimeConfigRevision}"
+        }
+      }
+    },
+    "OutboxAlias": {
+      "Type": "AWS::Lambda::Alias",
+      "Properties": {
+        "Name": "live",
+        "FunctionName": {
+          "Ref": "OutboxFunction"
+        },
+        "FunctionVersion": {
+          "Fn::GetAtt": [
+            "OutboxVersion",
+            "Version"
+          ]
+        }
+      }
+    },
+    "NotifierLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/enterprise/security/${AWS::StackName}/notifier"
+        },
+        "RetentionInDays": {
+          "Ref": "LogRetentionDays"
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "NotifierRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "sts:AssumeRole",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ScopedRuntime",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${NotifierLogs.Arn}:*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "dynamodb:GetItem",
+                  "Resource": {
+                    "Ref": "RegistryTableArn"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "dynamodb:GetItem",
+                  "Resource": {
+                    "Ref": "CasesTableArn"
+                  },
+                  "Condition": {
+                    "ArnEquals": {
+                      "lambda:SourceFunctionArn": {
+                        "Fn::Sub": "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-notifier"
+                      }
+                    },
+                    "ForAllValues:StringEquals": {
+                      "dynamodb:Attributes": [
+                        "case_id",
+                        "service_id",
+                        "dashboard_bucket",
+                        "dashboard_key",
+                        "publication_state",
+                        "publication_revision",
+                        "dashboard_notification_hotl",
+                        "dashboard_notification_hitl",
+                        "dashboard_notification_outcome",
+                        "dashboard_publication"
+                      ]
+                    },
+                    "Null": {
+                      "dynamodb:Attributes": "false"
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem"
+                  ],
+                  "Resource": {
+                    "Ref": "ReceiptTableArn"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "s3:GetObject",
+                  "Resource": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        {
+                          "Ref": "AuditBucketArn"
+                        },
+                        "/*/inv-*.md"
+                      ]
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "kms:Decrypt",
+                  "Resource": {
+                    "Ref": "AuditKeyArn"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sqs:ReceiveMessage",
+                    "sqs:DeleteMessage",
+                    "sqs:GetQueueAttributes",
+                    "sqs:ChangeMessageVisibility"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "NotificationQueue",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "kms:Decrypt",
+                  "Resource": {
+                    "Ref": "OpsKeyArn"
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "kms:ViaService": {
+                        "Fn::Sub": "sqs.${AWS::Region}.${AWS::URLSuffix}"
+                      },
+                      "kms:CallerAccount": {
+                        "Ref": "AWS::AccountId"
+                      }
+                    }
+                  }
+                },
+                {
+                  "Fn::If": [
+                    "SlackConfigured",
+                    {
+                      "Effect": "Allow",
+                      "Action": "secretsmanager:GetSecretValue",
+                      "Resource": {
+                        "Ref": "SlackSecretArn"
+                      },
+                      "Condition": {
+                        "ArnEquals": {
+                          "lambda:SourceFunctionArn": {
+                            "Fn::Sub": "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-notifier"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "Ref": "AWS::NoValue"
+                    }
+                  ]
+                },
+                {
+                  "Fn::If": [
+                    "SlackCustomerKey",
+                    {
+                      "Effect": "Allow",
+                      "Action": "kms:Decrypt",
+                      "Resource": {
+                        "Ref": "SlackSecretKeyArn"
+                      },
+                      "Condition": {
+                        "StringEquals": {
+                          "kms:ViaService": {
+                            "Fn::Sub": "secretsmanager.${AWS::Region}.${AWS::URLSuffix}"
+                          }
+                        },
+                        "ArnEquals": {
+                          "lambda:SourceFunctionArn": {
+                            "Fn::Sub": "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-notifier"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "Ref": "AWS::NoValue"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "dynamodb:PutItem",
+                  "Resource": {
+                    "Ref": "ExpectedActivityTableArn"
+                  },
+                  "Condition": {
+                    "ArnEquals": {
+                      "lambda:SourceFunctionArn": {
+                        "Fn::Sub": "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-notifier"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "NotifierFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${AWS::StackName}-notifier"
+        },
+        "Runtime": "python3.13",
+        "Handler": "runtime.notifier.handler",
+        "Description": {
+          "Fn::Sub": "Reviewed configuration revision ${RuntimeConfigRevision}"
+        },
+        "Timeout": 60,
+        "MemorySize": 256,
+        "Role": {
+          "Fn::GetAtt": [
+            "NotifierRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "S3Bucket": {
+            "Ref": "RuntimeCodeBucket"
+          },
+          "S3Key": {
+            "Ref": "RuntimeCodeKey"
+          },
+          "S3ObjectVersion": {
+            "Ref": "RuntimeCodeVersion"
+          }
+        },
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "NotifierLogs"
+          },
+          "LogFormat": "JSON"
+        },
+        "Environment": {
+          "Variables": {
+            "EXPECTED_ACCOUNT": {
+              "Ref": "AWS::AccountId"
+            },
+            "SLACK_SECRET_ARN": {
+              "Ref": "SlackSecretArn"
+            },
+            "SLACK_CHANNEL_ID": {
+              "Ref": "SlackChannelId"
+            },
+            "NOTIFICATIONS_ENABLED": {
+              "Fn::If": [
+                "SlackConfigured",
+                "true",
+                "false"
+              ]
+            },
+            "NOTIFICATIONS_TABLE": {
+              "Ref": "ReceiptTableName"
+            },
+            "EXPECTED_ACTIVITY_TABLE": {
+              "Ref": "ExpectedActivityTableName"
+            },
+            "AUDIT_BUCKET": {
+              "Ref": "AuditBucketName"
+            },
+            "DASHBOARD_BUCKET": {
+              "Ref": "AuditBucketName"
+            },
+            "REGISTRY_TABLE": {
+              "Ref": "RegistryTableName"
+            },
+            "CASES_TABLE": {
+              "Ref": "CasesTableName"
+            },
+            "QUEUE_URL": {
+              "Ref": "NotificationQueue"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "NotifierVersion": {
+      "Type": "AWS::Lambda::Version",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "NotifierFunction"
+        },
+        "CodeSha256": {
+          "Ref": "RuntimeCodeSha256"
+        },
+        "Description": {
+          "Fn::Sub": "${RuntimeCodeSha256}:${RuntimeConfigRevision}"
+        }
+      }
+    },
+    "NotifierAlias": {
+      "Type": "AWS::Lambda::Alias",
+      "Properties": {
+        "Name": "live",
+        "FunctionName": {
+          "Ref": "NotifierFunction"
+        },
+        "FunctionVersion": {
+          "Fn::GetAtt": [
+            "NotifierVersion",
+            "Version"
+          ]
+        }
+      }
+    },
+    "OpsLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/enterprise/security/${AWS::StackName}/ops"
+        },
+        "RetentionInDays": {
+          "Ref": "LogRetentionDays"
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "OpsRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "sts:AssumeRole",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ScopedRuntime",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${OpsLogs.Arn}:*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem"
+                  ],
+                  "Resource": {
+                    "Ref": "ReceiptTableArn"
+                  }
+                },
+                {
+                  "Fn::If": [
+                    "SlackConfigured",
+                    {
+                      "Effect": "Allow",
+                      "Action": "secretsmanager:GetSecretValue",
+                      "Resource": {
+                        "Ref": "SlackSecretArn"
+                      },
+                      "Condition": {
+                        "ArnEquals": {
+                          "lambda:SourceFunctionArn": {
+                            "Fn::Sub": "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-ops"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "Ref": "AWS::NoValue"
+                    }
+                  ]
+                },
+                {
+                  "Fn::If": [
+                    "SlackCustomerKey",
+                    {
+                      "Effect": "Allow",
+                      "Action": "kms:Decrypt",
+                      "Resource": {
+                        "Ref": "SlackSecretKeyArn"
+                      },
+                      "Condition": {
+                        "StringEquals": {
+                          "kms:ViaService": {
+                            "Fn::Sub": "secretsmanager.${AWS::Region}.${AWS::URLSuffix}"
+                          }
+                        },
+                        "ArnEquals": {
+                          "lambda:SourceFunctionArn": {
+                            "Fn::Sub": "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-ops"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "Ref": "AWS::NoValue"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "dynamodb:PutItem",
+                  "Resource": {
+                    "Ref": "ExpectedActivityTableArn"
+                  },
+                  "Condition": {
+                    "ArnEquals": {
+                      "lambda:SourceFunctionArn": {
+                        "Fn::Sub": "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-ops"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "OpsFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${AWS::StackName}-ops"
+        },
+        "Runtime": "python3.13",
+        "Handler": "runtime.ops.handler",
+        "Description": {
+          "Fn::Sub": "Reviewed configuration revision ${RuntimeConfigRevision}"
+        },
+        "Timeout": 60,
+        "MemorySize": 256,
+        "Role": {
+          "Fn::GetAtt": [
+            "OpsRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "S3Bucket": {
+            "Ref": "RuntimeCodeBucket"
+          },
+          "S3Key": {
+            "Ref": "RuntimeCodeKey"
+          },
+          "S3ObjectVersion": {
+            "Ref": "RuntimeCodeVersion"
+          }
+        },
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "OpsLogs"
+          },
+          "LogFormat": "JSON"
+        },
+        "Environment": {
+          "Variables": {
+            "EXPECTED_ACCOUNT": {
+              "Ref": "AWS::AccountId"
+            },
+            "SLACK_SECRET_ARN": {
+              "Ref": "SlackSecretArn"
+            },
+            "SLACK_CHANNEL_ID": {
+              "Ref": "SlackChannelId"
+            },
+            "NOTIFICATIONS_ENABLED": {
+              "Fn::If": [
+                "SlackConfigured",
+                "true",
+                "false"
+              ]
+            },
+            "NOTIFICATIONS_TABLE": {
+              "Ref": "ReceiptTableName"
+            },
+            "EXPECTED_ACTIVITY_TABLE": {
+              "Ref": "ExpectedActivityTableName"
+            },
+            "AUDIT_BUCKET": {
+              "Ref": "AuditBucketName"
+            },
+            "DASHBOARD_BUCKET": {
+              "Ref": "AuditBucketName"
+            },
+            "OPS_TOPIC_ARN": {
+              "Ref": "OpsTopicArn"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "OpsVersion": {
+      "Type": "AWS::Lambda::Version",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "OpsFunction"
+        },
+        "CodeSha256": {
+          "Ref": "RuntimeCodeSha256"
+        },
+        "Description": {
+          "Fn::Sub": "${RuntimeCodeSha256}:${RuntimeConfigRevision}"
+        }
+      }
+    },
+    "OpsAlias": {
+      "Type": "AWS::Lambda::Alias",
+      "Properties": {
+        "Name": "live",
+        "FunctionName": {
+          "Ref": "OpsFunction"
+        },
+        "FunctionVersion": {
+          "Fn::GetAtt": [
+            "OpsVersion",
+            "Version"
+          ]
+        }
+      }
+    },
+    "DashboardApprovalPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": {
+          "Fn::Sub": "${AWS::StackName}-approval"
+        },
+        "Roles": [
+          {
+            "Fn::Select": [
+              1,
+              {
+                "Fn::Split": [
+                  "/",
+                  {
+                    "Ref": "DashboardRoleArn"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "lambda:InvokeFunction",
+              "Resource": {
+                "Ref": "ApprovalAlias"
+              },
+              "Condition": {
+                "ArnEquals": {
+                  "lambda:SourceFunctionArn": {
+                    "Ref": "DashboardFunctionArn"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "WorkflowLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/vendedlogs/states/${AWS::StackName}/pipeline"
+        },
+        "RetentionInDays": {
+          "Ref": "LogRetentionDays"
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "WorkflowRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "sts:AssumeRole",
+              "Principal": {
+                "Service": "states.amazonaws.com"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                },
+                "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::Sub": "arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${AWS::StackName}-pipeline"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "InvokeScopedAliases",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "lambda:InvokeFunction",
+                  "Resource": [
+                    {
+                      "Ref": "PipelineAlias"
+                    },
+                    {
+                      "Ref": "BlockerAlias"
+                    },
+                    {
+                      "Ref": "TerminalAlias"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogDelivery",
+                    "logs:GetLogDelivery",
+                    "logs:UpdateLogDelivery",
+                    "logs:DeleteLogDelivery",
+                    "logs:ListLogDeliveries",
+                    "logs:PutResourcePolicy",
+                    "logs:DescribeResourcePolicies",
+                    "logs:DescribeLogGroups"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "PipelineStateMachine": {
+      "Type": "AWS::StepFunctions::StateMachine",
+      "Properties": {
+        "StateMachineName": {
+          "Fn::Sub": "${AWS::StackName}-pipeline"
+        },
+        "StateMachineType": "STANDARD",
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "WorkflowRole",
+            "Arn"
+          ]
+        },
+        "DefinitionString": "{\"Comment\":\"Service-bound HOTL and HITL with durable publications and committed human approvals\",\"StartAt\":\"PrepareCase\",\"TimeoutSeconds\":18000,\"States\":{\"PrepareCase\":{\"Type\":\"Task\",\"Resource\":\"arn:aws:states:::lambda:invoke\",\"Parameters\":{\"FunctionName\":\"${PipelineFunctionArn}\",\"Payload\":{\"stage\":\"prepare\",\"signal.$\":\"$.signal\",\"dry_run.$\":\"$.dry_run\",\"execution_arn.$\":\"$$.Execution.Id\"}},\"TimeoutSeconds\":120,\"ResultPath\":\"$.prepared\",\"ResultSelector\":{\"result.$\":\"$.Payload\"},\"Retry\":[{\"ErrorEquals\":[\"PublicationBusy\",\"ClientError\"],\"IntervalSeconds\":5,\"BackoffRate\":2,\"MaxAttempts\":6},{\"ErrorEquals\":[\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\",\"Lambda.TooManyRequestsException\"],\"IntervalSeconds\":2,\"BackoffRate\":2,\"MaxAttempts\":4}],\"Catch\":[{\"ErrorEquals\":[\"States.ALL\"],\"ResultPath\":\"$.failure\",\"Next\":\"PreparationFailed\"}],\"Next\":\"RouteCase\"},\"RouteCase\":{\"Type\":\"Choice\",\"Choices\":[{\"Variable\":\"$.prepared.result.tier\",\"NumericEquals\":1,\"Next\":\"AutomaticBlock\"}],\"Default\":\"PublishAndWait\"},\"PublishAndWait\":{\"Type\":\"Task\",\"Resource\":\"arn:aws:states:::lambda:invoke.waitForTaskToken\",\"Parameters\":{\"FunctionName\":\"${PipelineFunctionArn}\",\"Payload\":{\"stage\":\"wait_approval\",\"case_id.$\":\"$.prepared.result.case_id\",\"service_id.$\":\"$.prepared.result.service_id\",\"execution_arn.$\":\"$$.Execution.Id\",\"TaskToken.$\":\"$$.Task.Token\"}},\"TimeoutSeconds\":14400,\"ResultPath\":\"$.approval\",\"Retry\":[{\"ErrorEquals\":[\"PublicationBusy\",\"ClientError\"],\"IntervalSeconds\":5,\"BackoffRate\":2,\"MaxAttempts\":6},{\"ErrorEquals\":[\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\",\"Lambda.TooManyRequestsException\"],\"IntervalSeconds\":2,\"BackoffRate\":2,\"MaxAttempts\":4}],\"Catch\":[{\"ErrorEquals\":[\"States.Timeout\"],\"ResultPath\":\"$.failure\",\"Next\":\"RecordTimedOut\"},{\"ErrorEquals\":[\"States.ALL\"],\"ResultPath\":\"$.failure\",\"Next\":\"ApprovalFailed\"}],\"Next\":\"Decision\"},\"Decision\":{\"Type\":\"Choice\",\"Choices\":[{\"Variable\":\"$.approval.decision\",\"StringEquals\":\"reject\",\"Next\":\"RecordRejected\"},{\"Variable\":\"$.approval.decision\",\"StringEquals\":\"approve\",\"Next\":\"VerifyApprovalCommit\"}],\"Default\":\"RecordApprovalUnconfirmed\"},\"VerifyApprovalCommit\":{\"Type\":\"Task\",\"Resource\":\"arn:aws:states:::lambda:invoke\",\"Parameters\":{\"FunctionName\":\"${PipelineFunctionArn}\",\"Payload\":{\"stage\":\"approval_ready\",\"case_id.$\":\"$.prepared.result.case_id\",\"service_id.$\":\"$.prepared.result.service_id\",\"execution_arn.$\":\"$$.Execution.Id\"}},\"TimeoutSeconds\":120,\"ResultPath\":\"$.commit\",\"ResultSelector\":{\"result.$\":\"$.Payload\"},\"Retry\":[{\"ErrorEquals\":[\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\",\"Lambda.TooManyRequestsException\"],\"IntervalSeconds\":2,\"BackoffRate\":2,\"MaxAttempts\":4}],\"Catch\":[{\"ErrorEquals\":[\"States.ALL\"],\"ResultPath\":\"$.failure\",\"Next\":\"ApprovalFailed\"}],\"Next\":\"ApprovalCommit\"},\"ApprovalCommit\":{\"Type\":\"Choice\",\"Choices\":[{\"And\":[{\"Variable\":\"$.commit.result.ready\",\"BooleanEquals\":true},{\"Variable\":\"$.commit.result.approved_action\",\"StringEquals\":\"block_ip\"}],\"Next\":\"ApprovedBlock\"},{\"Variable\":\"$.commit.result.ready\",\"BooleanEquals\":true,\"Next\":\"RecordNoAction\"},{\"Variable\":\"$.commit.result.keep_waiting\",\"BooleanEquals\":true,\"Next\":\"WaitForCommit\"}],\"Default\":\"RecordApprovalUnconfirmed\"},\"WaitForCommit\":{\"Type\":\"Wait\",\"Seconds\":2,\"Next\":\"VerifyApprovalCommit\"},\"AutomaticBlock\":{\"Type\":\"Task\",\"Resource\":\"arn:aws:states:::lambda:invoke\",\"Parameters\":{\"FunctionName\":\"${BlockerFunctionArn}\",\"Payload\":{\"case_id.$\":\"$.prepared.result.case_id\",\"service_id.$\":\"$.prepared.result.service_id\",\"attacker_ip.$\":\"$.prepared.result.target.source_ip\",\"dry_run.$\":\"$.prepared.result.dry_run\",\"human_approved\":false,\"operation_id.$\":\"$$.Execution.Id\"}},\"TimeoutSeconds\":180,\"ResultPath\":\"$.block\",\"ResultSelector\":{\"result.$\":\"$.Payload\"},\"Retry\":[{\"ErrorEquals\":[\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\",\"Lambda.TooManyRequestsException\"],\"IntervalSeconds\":2,\"BackoffRate\":2,\"MaxAttempts\":4}],\"Catch\":[{\"ErrorEquals\":[\"States.ALL\"],\"ResultPath\":\"$.failure\",\"Next\":\"RecordAutomaticFailure\"}],\"Next\":\"RecordAutomaticResult\"},\"ApprovedBlock\":{\"Type\":\"Task\",\"Resource\":\"arn:aws:states:::lambda:invoke\",\"Parameters\":{\"FunctionName\":\"${BlockerFunctionArn}\",\"Payload\":{\"case_id.$\":\"$.prepared.result.case_id\",\"service_id.$\":\"$.prepared.result.service_id\",\"attacker_ip.$\":\"$.prepared.result.target.source_ip\",\"dry_run.$\":\"$.prepared.result.dry_run\",\"human_approved\":true,\"operation_id.$\":\"$$.Execution.Id\"}},\"TimeoutSeconds\":180,\"ResultPath\":\"$.block\",\"ResultSelector\":{\"result.$\":\"$.Payload\"},\"Retry\":[{\"ErrorEquals\":[\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\",\"Lambda.TooManyRequestsException\"],\"IntervalSeconds\":2,\"BackoffRate\":2,\"MaxAttempts\":4}],\"Catch\":[{\"ErrorEquals\":[\"States.ALL\"],\"ResultPath\":\"$.failure\",\"Next\":\"RecordApprovedFailure\"}],\"Next\":\"RecordApprovedResult\"},\"RecordAutomaticResult\":{\"Type\":\"Task\",\"Resource\":\"arn:aws:states:::lambda:invoke\",\"Parameters\":{\"FunctionName\":\"${PipelineFunctionArn}\",\"Payload\":{\"stage\":\"record\",\"case_id.$\":\"$.prepared.result.case_id\",\"service_id.$\":\"$.prepared.result.service_id\",\"execution_arn.$\":\"$$.Execution.Id\",\"outcome\":\"AUTO_BLOCK_RESULT\",\"mode\":\"HOTL\",\"response.$\":\"$.block.result\"}},\"TimeoutSeconds\":120,\"ResultPath\":\"$.recorded\",\"ResultSelector\":{\"result.$\":\"$.Payload\"},\"Retry\":[{\"ErrorEquals\":[\"PublicationBusy\",\"ClientError\"],\"IntervalSeconds\":5,\"BackoffRate\":2,\"MaxAttempts\":6},{\"ErrorEquals\":[\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\",\"Lambda.TooManyRequestsException\"],\"IntervalSeconds\":2,\"BackoffRate\":2,\"MaxAttempts\":4}],\"Catch\":[{\"ErrorEquals\":[\"States.ALL\"],\"ResultPath\":\"$.failure\",\"Next\":\"PublicationFailed\"}],\"End\":true},\"RecordAutomaticFailure\":{\"Type\":\"Task\",\"Resource\":\"arn:aws:states:::lambda:invoke\",\"Parameters\":{\"FunctionName\":\"${PipelineFunctionArn}\",\"Payload\":{\"stage\":\"record\",\"case_id.$\":\"$.prepared.result.case_id\",\"service_id.$\":\"$.prepared.result.service_id\",\"execution_arn.$\":\"$$.Execution.Id\",\"outcome\":\"AUTO_BLOCK_FAILED\",\"mode\":\"HOTL\",\"failure.$\":\"$.failure\"}},\"TimeoutSeconds\":120,\"ResultPath\":\"$.recorded\",\"ResultSelector\":{\"result.$\":\"$.Payload\"},\"Retry\":[{\"ErrorEquals\":[\"PublicationBusy\",\"ClientError\"],\"IntervalSeconds\":5,\"BackoffRate\":2,\"MaxAttempts\":6},{\"ErrorEquals\":[\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\",\"Lambda.TooManyRequestsException\"],\"IntervalSeconds\":2,\"BackoffRate\":2,\"MaxAttempts\":4}],\"Catch\":[{\"ErrorEquals\":[\"States.ALL\"],\"ResultPath\":\"$.failure\",\"Next\":\"PublicationFailed\"}],\"End\":true},\"RecordApprovedResult\":{\"Type\":\"Task\",\"Resource\":\"arn:aws:states:::lambda:invoke\",\"Parameters\":{\"FunctionName\":\"${PipelineFunctionArn}\",\"Payload\":{\"stage\":\"record\",\"case_id.$\":\"$.prepared.result.case_id\",\"service_id.$\":\"$.prepared.result.service_id\",\"execution_arn.$\":\"$$.Execution.Id\",\"outcome\":\"BLOCK_RESULT\",\"mode\":\"HITL\",\"response.$\":\"$.block.result\"}},\"TimeoutSeconds\":120,\"ResultPath\":\"$.recorded\",\"ResultSelector\":{\"result.$\":\"$.Payload\"},\"Retry\":[{\"ErrorEquals\":[\"PublicationBusy\",\"ClientError\"],\"IntervalSeconds\":5,\"BackoffRate\":2,\"MaxAttempts\":6},{\"ErrorEquals\":[\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\",\"Lambda.TooManyRequestsException\"],\"IntervalSeconds\":2,\"BackoffRate\":2,\"MaxAttempts\":4}],\"Catch\":[{\"ErrorEquals\":[\"States.ALL\"],\"ResultPath\":\"$.failure\",\"Next\":\"PublicationFailed\"}],\"End\":true},\"RecordApprovedFailure\":{\"Type\":\"Task\",\"Resource\":\"arn:aws:states:::lambda:invoke\",\"Parameters\":{\"FunctionName\":\"${PipelineFunctionArn}\",\"Payload\":{\"stage\":\"record\",\"case_id.$\":\"$.prepared.result.case_id\",\"service_id.$\":\"$.prepared.result.service_id\",\"execution_arn.$\":\"$$.Execution.Id\",\"outcome\":\"BLOCK_FAILED\",\"mode\":\"HITL\",\"failure.$\":\"$.failure\"}},\"TimeoutSeconds\":120,\"ResultPath\":\"$.recorded\",\"ResultSelector\":{\"result.$\":\"$.Payload\"},\"Retry\":[{\"ErrorEquals\":[\"PublicationBusy\",\"ClientError\"],\"IntervalSeconds\":5,\"BackoffRate\":2,\"MaxAttempts\":6},{\"ErrorEquals\":[\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\",\"Lambda.TooManyRequestsException\"],\"IntervalSeconds\":2,\"BackoffRate\":2,\"MaxAttempts\":4}],\"Catch\":[{\"ErrorEquals\":[\"States.ALL\"],\"ResultPath\":\"$.failure\",\"Next\":\"PublicationFailed\"}],\"End\":true},\"RecordTimedOut\":{\"Type\":\"Task\",\"Resource\":\"arn:aws:states:::lambda:invoke\",\"Parameters\":{\"FunctionName\":\"${PipelineFunctionArn}\",\"Payload\":{\"stage\":\"record\",\"case_id.$\":\"$.prepared.result.case_id\",\"service_id.$\":\"$.prepared.result.service_id\",\"execution_arn.$\":\"$$.Execution.Id\",\"outcome\":\"TIMED_OUT\",\"mode\":\"HITL\",\"failure.$\":\"$.failure\"}},\"TimeoutSeconds\":120,\"ResultPath\":\"$.recorded\",\"ResultSelector\":{\"result.$\":\"$.Payload\"},\"Retry\":[{\"ErrorEquals\":[\"PublicationBusy\",\"ClientError\"],\"IntervalSeconds\":5,\"BackoffRate\":2,\"MaxAttempts\":6},{\"ErrorEquals\":[\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\",\"Lambda.TooManyRequestsException\"],\"IntervalSeconds\":2,\"BackoffRate\":2,\"MaxAttempts\":4}],\"Catch\":[{\"ErrorEquals\":[\"States.ALL\"],\"ResultPath\":\"$.failure\",\"Next\":\"PublicationFailed\"}],\"End\":true},\"RecordRejected\":{\"Type\":\"Task\",\"Resource\":\"arn:aws:states:::lambda:invoke\",\"Parameters\":{\"FunctionName\":\"${PipelineFunctionArn}\",\"Payload\":{\"stage\":\"record\",\"case_id.$\":\"$.prepared.result.case_id\",\"service_id.$\":\"$.prepared.result.service_id\",\"execution_arn.$\":\"$$.Execution.Id\",\"outcome\":\"REJECTED\",\"mode\":\"HITL\"}},\"TimeoutSeconds\":120,\"ResultPath\":\"$.recorded\",\"ResultSelector\":{\"result.$\":\"$.Payload\"},\"Retry\":[{\"ErrorEquals\":[\"PublicationBusy\",\"ClientError\"],\"IntervalSeconds\":5,\"BackoffRate\":2,\"MaxAttempts\":6},{\"ErrorEquals\":[\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\",\"Lambda.TooManyRequestsException\"],\"IntervalSeconds\":2,\"BackoffRate\":2,\"MaxAttempts\":4}],\"Catch\":[{\"ErrorEquals\":[\"States.ALL\"],\"ResultPath\":\"$.failure\",\"Next\":\"PublicationFailed\"}],\"End\":true},\"RecordNoAction\":{\"Type\":\"Task\",\"Resource\":\"arn:aws:states:::lambda:invoke\",\"Parameters\":{\"FunctionName\":\"${PipelineFunctionArn}\",\"Payload\":{\"stage\":\"record\",\"case_id.$\":\"$.prepared.result.case_id\",\"service_id.$\":\"$.prepared.result.service_id\",\"execution_arn.$\":\"$$.Execution.Id\",\"outcome\":\"NO_ACTION\",\"mode\":\"HITL\"}},\"TimeoutSeconds\":120,\"ResultPath\":\"$.recorded\",\"ResultSelector\":{\"result.$\":\"$.Payload\"},\"Retry\":[{\"ErrorEquals\":[\"PublicationBusy\",\"ClientError\"],\"IntervalSeconds\":5,\"BackoffRate\":2,\"MaxAttempts\":6},{\"ErrorEquals\":[\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\",\"Lambda.TooManyRequestsException\"],\"IntervalSeconds\":2,\"BackoffRate\":2,\"MaxAttempts\":4}],\"Catch\":[{\"ErrorEquals\":[\"States.ALL\"],\"ResultPath\":\"$.failure\",\"Next\":\"PublicationFailed\"}],\"End\":true},\"RecordApprovalUnconfirmed\":{\"Type\":\"Task\",\"Resource\":\"arn:aws:states:::lambda:invoke\",\"Parameters\":{\"FunctionName\":\"${PipelineFunctionArn}\",\"Payload\":{\"stage\":\"record\",\"case_id.$\":\"$.prepared.result.case_id\",\"service_id.$\":\"$.prepared.result.service_id\",\"execution_arn.$\":\"$$.Execution.Id\",\"outcome\":\"APPROVAL_FAILED\",\"mode\":\"HITL\"}},\"TimeoutSeconds\":120,\"ResultPath\":\"$.recorded\",\"ResultSelector\":{\"result.$\":\"$.Payload\"},\"Retry\":[{\"ErrorEquals\":[\"PublicationBusy\",\"ClientError\"],\"IntervalSeconds\":5,\"BackoffRate\":2,\"MaxAttempts\":6},{\"ErrorEquals\":[\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\",\"Lambda.TooManyRequestsException\"],\"IntervalSeconds\":2,\"BackoffRate\":2,\"MaxAttempts\":4}],\"Catch\":[{\"ErrorEquals\":[\"States.ALL\"],\"ResultPath\":\"$.failure\",\"Next\":\"PublicationFailed\"}],\"End\":true},\"PreparationFailed\":{\"Type\":\"Task\",\"Resource\":\"arn:aws:states:::lambda:invoke\",\"Parameters\":{\"FunctionName\":\"${TerminalFunctionArn}\",\"Payload\":{\"stage\":\"AI1\",\"case_id.$\":\"$$.Execution.Name\",\"service_id.$\":\"$$.Execution.Input.signal.detail.service_id\",\"failure.$\":\"$.failure\",\"execution_arn.$\":\"$$.Execution.Id\"}},\"TimeoutSeconds\":120,\"ResultPath\":\"$.terminal\",\"ResultSelector\":{\"result.$\":\"$.Payload\"},\"Retry\":[{\"ErrorEquals\":[\"PublicationBusy\",\"ClientError\"],\"IntervalSeconds\":5,\"BackoffRate\":2,\"MaxAttempts\":6},{\"ErrorEquals\":[\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\",\"Lambda.TooManyRequestsException\"],\"IntervalSeconds\":2,\"BackoffRate\":2,\"MaxAttempts\":4}],\"End\":true},\"ApprovalFailed\":{\"Type\":\"Task\",\"Resource\":\"arn:aws:states:::lambda:invoke\",\"Parameters\":{\"FunctionName\":\"${TerminalFunctionArn}\",\"Payload\":{\"stage\":\"APPROVAL\",\"case_id.$\":\"$$.Execution.Name\",\"service_id.$\":\"$$.Execution.Input.signal.detail.service_id\",\"failure.$\":\"$.failure\",\"execution_arn.$\":\"$$.Execution.Id\"}},\"TimeoutSeconds\":120,\"ResultPath\":\"$.terminal\",\"ResultSelector\":{\"result.$\":\"$.Payload\"},\"Retry\":[{\"ErrorEquals\":[\"PublicationBusy\",\"ClientError\"],\"IntervalSeconds\":5,\"BackoffRate\":2,\"MaxAttempts\":6},{\"ErrorEquals\":[\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\",\"Lambda.TooManyRequestsException\"],\"IntervalSeconds\":2,\"BackoffRate\":2,\"MaxAttempts\":4}],\"End\":true},\"PublicationFailed\":{\"Type\":\"Task\",\"Resource\":\"arn:aws:states:::lambda:invoke\",\"Parameters\":{\"FunctionName\":\"${TerminalFunctionArn}\",\"Payload\":{\"stage\":\"PUBLICATION\",\"case_id.$\":\"$$.Execution.Name\",\"service_id.$\":\"$$.Execution.Input.signal.detail.service_id\",\"failure.$\":\"$.failure\",\"execution_arn.$\":\"$$.Execution.Id\"}},\"TimeoutSeconds\":120,\"ResultPath\":\"$.terminal\",\"ResultSelector\":{\"result.$\":\"$.Payload\"},\"Retry\":[{\"ErrorEquals\":[\"PublicationBusy\",\"ClientError\"],\"IntervalSeconds\":5,\"BackoffRate\":2,\"MaxAttempts\":6},{\"ErrorEquals\":[\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\",\"Lambda.TooManyRequestsException\"],\"IntervalSeconds\":2,\"BackoffRate\":2,\"MaxAttempts\":4}],\"End\":true}}}",
+        "DefinitionSubstitutions": {
+          "PipelineFunctionArn": {
+            "Ref": "PipelineAlias"
+          },
+          "BlockerFunctionArn": {
+            "Ref": "BlockerAlias"
+          },
+          "TerminalFunctionArn": {
+            "Ref": "TerminalAlias"
+          }
+        },
+        "LoggingConfiguration": {
+          "Level": "ERROR",
+          "IncludeExecutionData": false,
+          "Destinations": [
+            {
+              "CloudWatchLogsLogGroup": {
+                "LogGroupArn": {
+                  "Fn::GetAtt": [
+                    "WorkflowLogs",
+                    "Arn"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "NotificationQueue": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "KmsMasterKeyId": {
+          "Ref": "OpsKeyArn"
+        },
+        "MessageRetentionPeriod": 1209600,
+        "MaximumMessageSize": 1048576,
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ],
+        "VisibilityTimeout": 360,
+        "RedrivePolicy": {
+          "deadLetterTargetArn": {
+            "Fn::GetAtt": [
+              "NotificationFailures",
+              "Arn"
+            ]
+          },
+          "maxReceiveCount": 5
+        }
+      }
+    },
+    "NotificationFailures": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "KmsMasterKeyId": {
+          "Ref": "OpsKeyArn"
+        },
+        "MessageRetentionPeriod": 1209600,
+        "MaximumMessageSize": 1048576,
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "IngressFailures": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "KmsMasterKeyId": {
+          "Ref": "OpsKeyArn"
+        },
+        "MessageRetentionPeriod": 1209600,
+        "MaximumMessageSize": 1048576,
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "TerminalFailures": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "KmsMasterKeyId": {
+          "Ref": "OpsKeyArn"
+        },
+        "MessageRetentionPeriod": 1209600,
+        "MaximumMessageSize": 1048576,
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "StreamFailures": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "KmsMasterKeyId": {
+          "Ref": "OpsKeyArn"
+        },
+        "MessageRetentionPeriod": 1209600,
+        "MaximumMessageSize": 1048576,
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "OutboxStreamMapping": {
+      "Type": "AWS::Lambda::EventSourceMapping",
+      "DependsOn": [
+        "OutboxRole",
+        "StreamFailurePolicy"
+      ],
+      "Properties": {
+        "FunctionName": {
+          "Ref": "OutboxAlias"
+        },
+        "EventSourceArn": {
+          "Ref": "CasesTableStreamArn"
+        },
+        "StartingPosition": "LATEST",
+        "BatchSize": 25,
+        "BisectBatchOnFunctionError": true,
+        "MaximumRetryAttempts": 3,
+        "MaximumRecordAgeInSeconds": 3600,
+        "FunctionResponseTypes": [
+          "ReportBatchItemFailures"
+        ],
+        "DestinationConfig": {
+          "OnFailure": {
+            "Destination": {
+              "Fn::GetAtt": [
+                "StreamFailures",
+                "Arn"
+              ]
+            }
+          }
+        },
+        "FilterCriteria": {
+          "Filters": [
+            {
+              "Pattern": "{\"eventName\":[\"INSERT\",\"MODIFY\"]}"
+            }
+          ]
+        }
+      }
+    },
+    "NotifierQueueMapping": {
+      "Type": "AWS::Lambda::EventSourceMapping",
+      "DependsOn": [
+        "NotifierRole",
+        "EventQueuePolicy",
+        "NotificationFailurePolicy"
+      ],
+      "Properties": {
+        "FunctionName": {
+          "Ref": "NotifierAlias"
+        },
+        "EventSourceArn": {
+          "Fn::GetAtt": [
+            "NotificationQueue",
+            "Arn"
+          ]
+        },
+        "BatchSize": 5,
+        "Enabled": {
+          "Fn::If": [
+            "SlackConfigured",
+            true,
+            false
+          ]
+        },
+        "FunctionResponseTypes": [
+          "ReportBatchItemFailures"
+        ]
+      }
+    },
+    "ServiceSignalRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "State": "ENABLED",
+        "EventBusName": {
+          "Ref": "SecurityEventBusName"
+        },
+        "EventPattern": {
+          "source": [
+            "security.service"
+          ],
+          "detail-type": [
+            "ServiceSecuritySignal.v1"
+          ],
+          "account": [
+            {
+              "Ref": "AWS::AccountId"
+            }
+          ],
+          "region": [
+            {
+              "Ref": "AWS::Region"
+            }
+          ],
+          "detail": {
+            "schema_version": [
+              "1.0"
+            ],
+            "confidence": [
+              "provider_signal"
+            ]
+          }
+        },
+        "Targets": [
+          {
+            "Id": "Deliver",
+            "Arn": {
+              "Ref": "PipelineAlias"
+            },
+            "RetryPolicy": {
+              "MaximumRetryAttempts": 10,
+              "MaximumEventAgeInSeconds": 3600
+            },
+            "DeadLetterConfig": {
+              "Arn": {
+                "Fn::GetAtt": [
+                  "IngressFailures",
+                  "Arn"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "ServiceSignalRulePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "PipelineAlias"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "ServiceSignalRule",
+            "Arn"
+          ]
+        },
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
+        }
+      }
+    },
+    "TerminalRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "State": "ENABLED",
+        "EventPattern": {
+          "source": [
+            "aws.states"
+          ],
+          "detail-type": [
+            "Step Functions Execution Status Change"
+          ],
+          "account": [
+            {
+              "Ref": "AWS::AccountId"
+            }
+          ],
+          "region": [
+            {
+              "Ref": "AWS::Region"
+            }
+          ],
+          "detail": {
+            "stateMachineArn": [
+              {
+                "Fn::Sub": "arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${AWS::StackName}-pipeline"
+              }
+            ],
+            "status": [
+              "FAILED",
+              "TIMED_OUT",
+              "ABORTED"
+            ]
+          }
+        },
+        "Targets": [
+          {
+            "Id": "Deliver",
+            "Arn": {
+              "Ref": "TerminalAlias"
+            },
+            "RetryPolicy": {
+              "MaximumRetryAttempts": 10,
+              "MaximumEventAgeInSeconds": 3600
+            },
+            "DeadLetterConfig": {
+              "Arn": {
+                "Fn::GetAtt": [
+                  "TerminalFailures",
+                  "Arn"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "TerminalRulePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "TerminalAlias"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "TerminalRule",
+            "Arn"
+          ]
+        },
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
+        }
+      }
+    },
+    "ReconcileSchedule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "State": "ENABLED",
+        "ScheduleExpression": "rate(1 minute)",
+        "Targets": [
+          {
+            "Id": "Deliver",
+            "Arn": {
+              "Ref": "PublicationReconcilerAlias"
+            },
+            "RetryPolicy": {
+              "MaximumRetryAttempts": 10,
+              "MaximumEventAgeInSeconds": 3600
+            },
+            "DeadLetterConfig": {
+              "Arn": {
+                "Fn::GetAtt": [
+                  "TerminalFailures",
+                  "Arn"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "ReconcileSchedulePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "PublicationReconcilerAlias"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "ReconcileSchedule",
+            "Arn"
+          ]
+        },
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
+        }
+      }
+    },
+    "PublicationRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "EventBusName": {
+          "Ref": "SecurityEventBusName"
+        },
+        "State": "ENABLED",
+        "EventPattern": {
+          "source": [
+            "whs.hitl.dashboard"
+          ],
+          "detail-type": [
+            "DashboardReportPublished.v1"
+          ],
+          "account": [
+            {
+              "Ref": "AWS::AccountId"
+            }
+          ],
+          "region": [
+            {
+              "Ref": "AWS::Region"
+            }
+          ],
+          "detail": {
+            "schema_version": [
+              "1.0"
+            ]
+          }
+        },
+        "Targets": [
+          {
+            "Id": "ReportQueue",
+            "Arn": {
+              "Fn::GetAtt": [
+                "NotificationQueue",
+                "Arn"
+              ]
+            },
+            "RetryPolicy": {
+              "MaximumRetryAttempts": 10,
+              "MaximumEventAgeInSeconds": 3600
+            },
+            "DeadLetterConfig": {
+              "Arn": {
+                "Fn::GetAtt": [
+                  "NotificationFailures",
+                  "Arn"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "EventQueuePolicy": {
+      "Type": "AWS::SQS::QueuePolicy",
+      "Properties": {
+        "Queues": [
+          {
+            "Ref": "NotificationQueue"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "sqs:SendMessage",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "NotificationQueue",
+                  "Arn"
+                ]
+              },
+              "Sid": "AllowOwnedEventBridgeDelivery",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Condition": {
+                "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::GetAtt": [
+                      "PublicationRule",
+                      "Arn"
+                    ]
+                  }
+                },
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "DenyInsecureTransport",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "sqs:*",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "NotificationQueue",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "NotificationFailurePolicy": {
+      "Type": "AWS::SQS::QueuePolicy",
+      "Properties": {
+        "Queues": [
+          {
+            "Ref": "NotificationFailures"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "sqs:SendMessage",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "NotificationFailures",
+                  "Arn"
+                ]
+              },
+              "Sid": "AllowOwnedEventBridgeDelivery",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Condition": {
+                "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::GetAtt": [
+                      "PublicationRule",
+                      "Arn"
+                    ]
+                  }
+                },
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "DenyInsecureTransport",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "sqs:*",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "NotificationFailures",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "DependsOn": [
+        "EventQueuePolicy"
+      ]
+    },
+    "IngressFailurePolicy": {
+      "Type": "AWS::SQS::QueuePolicy",
+      "Properties": {
+        "Queues": [
+          {
+            "Ref": "IngressFailures"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "sqs:SendMessage",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "IngressFailures",
+                  "Arn"
+                ]
+              },
+              "Sid": "AllowOwnedEventBridgeDelivery",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Condition": {
+                "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::GetAtt": [
+                      "ServiceSignalRule",
+                      "Arn"
+                    ]
+                  }
+                },
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "DenyInsecureTransport",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "sqs:*",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "IngressFailures",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "DependsOn": [
+        "EventQueuePolicy"
+      ]
+    },
+    "TerminalFailurePolicy": {
+      "Type": "AWS::SQS::QueuePolicy",
+      "Properties": {
+        "Queues": [
+          {
+            "Ref": "TerminalFailures"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "sqs:SendMessage",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "TerminalFailures",
+                  "Arn"
+                ]
+              },
+              "Sid": "AllowOwnedEventBridgeDelivery",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Condition": {
+                "ArnEquals": {
+                  "aws:SourceArn": [
+                    {
+                      "Fn::GetAtt": [
+                        "TerminalRule",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "ReconcileSchedule",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                },
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "DenyInsecureTransport",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "sqs:*",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "TerminalFailures",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "DependsOn": [
+        "EventQueuePolicy"
+      ]
+    },
+    "StreamFailurePolicy": {
+      "Type": "AWS::SQS::QueuePolicy",
+      "Properties": {
+        "Queues": [
+          {
+            "Ref": "StreamFailures"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "sqs:*",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "StreamFailures",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "PipelineAsyncFailure": {
+      "Type": "AWS::Lambda::EventInvokeConfig",
+      "DependsOn": [
+        "PipelineAlias",
+        "PipelineRole",
+        "IngressFailurePolicy"
+      ],
+      "Properties": {
+        "FunctionName": {
+          "Ref": "PipelineFunction"
+        },
+        "Qualifier": "live",
+        "MaximumRetryAttempts": 2,
+        "MaximumEventAgeInSeconds": 3600,
+        "DestinationConfig": {
+          "OnFailure": {
+            "Destination": {
+              "Fn::GetAtt": [
+                "IngressFailures",
+                "Arn"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "TerminalAsyncFailure": {
+      "Type": "AWS::Lambda::EventInvokeConfig",
+      "DependsOn": [
+        "TerminalAlias",
+        "TerminalRole",
+        "TerminalFailurePolicy"
+      ],
+      "Properties": {
+        "FunctionName": {
+          "Ref": "TerminalFunction"
+        },
+        "Qualifier": "live",
+        "MaximumRetryAttempts": 2,
+        "MaximumEventAgeInSeconds": 3600,
+        "DestinationConfig": {
+          "OnFailure": {
+            "Destination": {
+              "Fn::GetAtt": [
+                "TerminalFailures",
+                "Arn"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "PublicationReconcilerAsyncFailure": {
+      "Type": "AWS::Lambda::EventInvokeConfig",
+      "DependsOn": [
+        "PublicationReconcilerAlias",
+        "PublicationReconcilerRole",
+        "TerminalFailurePolicy"
+      ],
+      "Properties": {
+        "FunctionName": {
+          "Ref": "PublicationReconcilerFunction"
+        },
+        "Qualifier": "live",
+        "MaximumRetryAttempts": 2,
+        "MaximumEventAgeInSeconds": 3600,
+        "DestinationConfig": {
+          "OnFailure": {
+            "Destination": {
+              "Fn::GetAtt": [
+                "TerminalFailures",
+                "Arn"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "OpsPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "OpsAlias"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "sns.amazonaws.com",
+        "SourceArn": {
+          "Ref": "OpsTopicArn"
+        },
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
+        }
+      }
+    },
+    "OpsSubscription": {
+      "Type": "AWS::SNS::Subscription",
+      "DependsOn": [
+        "OpsPermission"
+      ],
+      "Properties": {
+        "TopicArn": {
+          "Ref": "OpsTopicArn"
+        },
+        "Protocol": "lambda",
+        "Endpoint": {
+          "Ref": "OpsAlias"
+        }
+      }
+    },
+    "IngressOpsPublisherRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "${InstallationId}-ingress-ops-publisher"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "sts:AssumeRole",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                },
+                "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::Sub": "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/${SecurityEventBusName}/${InstallationId}-ingress-ops"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "PublishOwnedIngressAlarms",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "sns:Publish",
+                  "Resource": {
+                    "Ref": "OpsTopicArn"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:GenerateDataKey",
+                    "kms:Decrypt"
+                  ],
+                  "Resource": {
+                    "Ref": "OpsKeyArn"
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "kms:ViaService": {
+                        "Fn::Sub": "sns.${AWS::Region}.${AWS::URLSuffix}"
+                      },
+                      "kms:CallerAccount": {
+                        "Ref": "AWS::AccountId"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "IngressOpsFailures": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "QueueName": {
+          "Fn::Sub": "${InstallationId}-ingress-ops-failures"
+        },
+        "KmsMasterKeyId": {
+          "Ref": "OpsKeyArn"
+        },
+        "MessageRetentionPeriod": 1209600,
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "IngressOpsFailurePolicy": {
+      "Type": "AWS::SQS::QueuePolicy",
+      "Properties": {
+        "Queues": [
+          {
+            "Ref": "IngressOpsFailures"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "sqs:SendMessage",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "IngressOpsFailures",
+                  "Arn"
+                ]
+              },
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Condition": {
+                "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::Sub": "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/${SecurityEventBusName}/${InstallationId}-ingress-ops"
+                  }
+                },
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                }
+              }
+            },
+            {
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "sqs:*",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "IngressOpsFailures",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "IngressOpsRule": {
+      "Type": "AWS::Events::Rule",
+      "DependsOn": [
+        "IngressOpsFailurePolicy"
+      ],
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${InstallationId}-ingress-ops"
+        },
+        "EventBusName": {
+          "Ref": "SecurityEventBusName"
+        },
+        "State": "ENABLED",
+        "EventPattern": {
+          "source": [
+            "aws.cloudwatch"
+          ],
+          "detail-type": [
+            "CloudWatch Alarm State Change"
+          ],
+          "account": [
+            {
+              "Ref": "AWS::AccountId"
+            }
+          ],
+          "detail": {
+            "alarmName": {
+              "Ref": "IngressAlarmNames"
+            },
+            "state": {
+              "value": [
+                "ALARM",
+                "OK",
+                "INSUFFICIENT_DATA"
+              ]
+            }
+          }
+        },
+        "Targets": [
+          {
+            "Id": "OwnedOpsTopic",
+            "Arn": {
+              "Ref": "OpsTopicArn"
+            },
+            "RoleArn": {
+              "Fn::GetAtt": [
+                "IngressOpsPublisherRole",
+                "Arn"
+              ]
+            },
+            "InputTransformer": {
+              "InputPathsMap": {
+                "alarm": "$.detail.alarmName",
+                "state": "$.detail.state.value"
+              },
+              "InputTemplate": "{\"AlarmName\":<alarm>,\"NewStateValue\":<state>}"
+            },
+            "RetryPolicy": {
+              "MaximumRetryAttempts": 10,
+              "MaximumEventAgeInSeconds": 3600
+            },
+            "DeadLetterConfig": {
+              "Arn": {
+                "Fn::GetAtt": [
+                  "IngressOpsFailures",
+                  "Arn"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "PipelineErrors": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-pipelineerrors"
+        },
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Errors",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "PipelineFunction"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "ApprovalErrors": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-approvalerrors"
+        },
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Errors",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "ApprovalFunction"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "BlockerErrors": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-blockererrors"
+        },
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Errors",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "BlockerFunction"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "TerminalErrors": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-terminalerrors"
+        },
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Errors",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "TerminalFunction"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "PublicationReconcilerErrors": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-publicationreconcilererrors"
+        },
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Errors",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "PublicationReconcilerFunction"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "OutboxErrors": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-outboxerrors"
+        },
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Errors",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "OutboxFunction"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "NotifierErrors": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-notifiererrors"
+        },
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Errors",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "NotifierFunction"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "OpsErrors": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-opserrors"
+        },
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Errors",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "OpsFunction"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "NotificationQueueAge": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-notificationqueueage"
+        },
+        "Namespace": "AWS/SQS",
+        "MetricName": "ApproximateAgeOfOldestMessage",
+        "Dimensions": [
+          {
+            "Name": "QueueName",
+            "Value": {
+              "Fn::GetAtt": [
+                "NotificationQueue",
+                "QueueName"
+              ]
+            }
+          }
+        ],
+        "Statistic": "Maximum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 300,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "NotificationFailuresMessages": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-notificationfailuresmessages"
+        },
+        "Namespace": "AWS/SQS",
+        "MetricName": "ApproximateNumberOfMessagesVisible",
+        "Dimensions": [
+          {
+            "Name": "QueueName",
+            "Value": {
+              "Fn::GetAtt": [
+                "NotificationFailures",
+                "QueueName"
+              ]
+            }
+          }
+        ],
+        "Statistic": "Maximum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "IngressFailuresMessages": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-ingressfailuresmessages"
+        },
+        "Namespace": "AWS/SQS",
+        "MetricName": "ApproximateNumberOfMessagesVisible",
+        "Dimensions": [
+          {
+            "Name": "QueueName",
+            "Value": {
+              "Fn::GetAtt": [
+                "IngressFailures",
+                "QueueName"
+              ]
+            }
+          }
+        ],
+        "Statistic": "Maximum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "TerminalFailuresMessages": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-terminalfailuresmessages"
+        },
+        "Namespace": "AWS/SQS",
+        "MetricName": "ApproximateNumberOfMessagesVisible",
+        "Dimensions": [
+          {
+            "Name": "QueueName",
+            "Value": {
+              "Fn::GetAtt": [
+                "TerminalFailures",
+                "QueueName"
+              ]
+            }
+          }
+        ],
+        "Statistic": "Maximum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "StreamFailuresMessages": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-streamfailuresmessages"
+        },
+        "Namespace": "AWS/SQS",
+        "MetricName": "ApproximateNumberOfMessagesVisible",
+        "Dimensions": [
+          {
+            "Name": "QueueName",
+            "Value": {
+              "Fn::GetAtt": [
+                "StreamFailures",
+                "QueueName"
+              ]
+            }
+          }
+        ],
+        "Statistic": "Maximum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "ExecutionsFailed": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-executionsfailed"
+        },
+        "Namespace": "AWS/States",
+        "MetricName": "ExecutionsFailed",
+        "Dimensions": [
+          {
+            "Name": "StateMachineArn",
+            "Value": {
+              "Ref": "PipelineStateMachine"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "ExecutionsTimedOut": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-executionstimedout"
+        },
+        "Namespace": "AWS/States",
+        "MetricName": "ExecutionsTimedOut",
+        "Dimensions": [
+          {
+            "Name": "StateMachineArn",
+            "Value": {
+              "Ref": "PipelineStateMachine"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "ExecutionsAborted": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-executionsaborted"
+        },
+        "Namespace": "AWS/States",
+        "MetricName": "ExecutionsAborted",
+        "Dimensions": [
+          {
+            "Name": "StateMachineArn",
+            "Value": {
+              "Ref": "PipelineStateMachine"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "RecoveryPendingExamined": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-recoverypendingexamined"
+        },
+        "Namespace": "EnterpriseSecurity/Recovery",
+        "MetricName": "PendingExamined",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "PublicationReconcilerFunction"
+            }
+          }
+        ],
+        "Statistic": "Maximum",
+        "Period": 60,
+        "EvaluationPeriods": 3,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "DatapointsToAlarm": 3
+      }
+    },
+    "RecoveryDependencyErrors": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-recoverydependencyerrors"
+        },
+        "Namespace": "EnterpriseSecurity/Recovery",
+        "MetricName": "DependencyErrors",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "PublicationReconcilerFunction"
+            }
+          }
+        ],
+        "Statistic": "Maximum",
+        "Period": 60,
+        "EvaluationPeriods": 3,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "DatapointsToAlarm": 3
+      }
+    },
+    "IngressOpsDeliveryErrors": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-ingressopsdeliveryerrors"
+        },
+        "Namespace": "AWS/Events",
+        "MetricName": "FailedInvocations",
+        "Dimensions": [
+          {
+            "Name": "RuleName",
+            "Value": {
+              "Ref": "IngressOpsRule"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "IngressOpsDlqDeliveryErrors": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-ingressopsdlqdeliveryerrors"
+        },
+        "Namespace": "AWS/Events",
+        "MetricName": "InvocationsFailedToBeSentToDlq",
+        "Dimensions": [
+          {
+            "Name": "RuleName",
+            "Value": {
+              "Ref": "IngressOpsRule"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "PipelineAsyncDropped": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-pipelineasyncdropped"
+        },
+        "Namespace": "AWS/Lambda",
+        "MetricName": "AsyncEventsDropped",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "PipelineFunction"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "PipelineDestinationFailures": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-pipelinedestinationfailures"
+        },
+        "Namespace": "AWS/Lambda",
+        "MetricName": "DestinationDeliveryFailures",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "PipelineFunction"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "TerminalAsyncDropped": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-terminalasyncdropped"
+        },
+        "Namespace": "AWS/Lambda",
+        "MetricName": "AsyncEventsDropped",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "TerminalFunction"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "TerminalDestinationFailures": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-terminaldestinationfailures"
+        },
+        "Namespace": "AWS/Lambda",
+        "MetricName": "DestinationDeliveryFailures",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "TerminalFunction"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "PublicationReconcilerAsyncDropped": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-publicationreconcilerasyncdropped"
+        },
+        "Namespace": "AWS/Lambda",
+        "MetricName": "AsyncEventsDropped",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "PublicationReconcilerFunction"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "PublicationReconcilerDestinationFailures": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-publicationreconcilerdestinationfailures"
+        },
+        "Namespace": "AWS/Lambda",
+        "MetricName": "DestinationDeliveryFailures",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "PublicationReconcilerFunction"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    },
+    "IngressOpsFailureMessages": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-ingressopsfailuremessages"
+        },
+        "Namespace": "AWS/SQS",
+        "MetricName": "ApproximateNumberOfMessagesVisible",
+        "Dimensions": [
+          {
+            "Name": "QueueName",
+            "Value": {
+              "Fn::GetAtt": [
+                "IngressOpsFailures",
+                "QueueName"
+              ]
+            }
+          }
+        ],
+        "Statistic": "Maximum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "OpsTopicArn"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "PipelineStateMachineArn": {
+      "Value": {
+        "Ref": "PipelineStateMachine"
+      }
+    },
+    "ApprovalFunctionArn": {
+      "Value": {
+        "Ref": "ApprovalAlias"
+      }
+    },
+    "SignalIngressFunctionArn": {
+      "Value": {
+        "Ref": "PipelineAlias"
+      }
+    },
+    "ServiceSignalRuleArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "ServiceSignalRule",
+          "Arn"
+        ]
+      }
+    },
+    "ReconcilerFunctionArn": {
+      "Value": {
+        "Ref": "PublicationReconcilerAlias"
+      }
+    },
+    "NotifierFunctionArn": {
+      "Value": {
+        "Ref": "NotifierAlias"
+      }
+    },
+    "TerminalFunctionArn": {
+      "Value": {
+        "Ref": "TerminalAlias"
+      }
+    },
+    "OpsFunctionArn": {
+      "Value": {
+        "Ref": "OpsAlias"
+      }
+    },
+    "BlockerFunctionArn": {
+      "Value": {
+        "Ref": "BlockerAlias"
+      }
+    },
+    "OutboxFunctionArn": {
+      "Value": {
+        "Ref": "OutboxAlias"
+      }
+    },
+    "ReceiptTableName": {
+      "Value": {
+        "Ref": "ReceiptTableName"
+      }
+    },
+    "ReceiptTableArn": {
+      "Value": {
+        "Ref": "ReceiptTableArn"
+      }
+    },
+    "NotificationQueueUrl": {
+      "Value": {
+        "Ref": "NotificationQueue"
+      }
+    },
+    "NotificationQueueArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "NotificationQueue",
+          "Arn"
+        ]
+      }
+    },
+    "NotificationsEnabled": {
+      "Value": {
+        "Fn::If": [
+          "SlackConfigured",
+          "true",
+          "false"
+        ]
+      }
+    },
+    "IngressOpsRuleArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "IngressOpsRule",
+          "Arn"
+        ]
+      }
+    },
+    "IngressOpsPublisherRoleArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "IngressOpsPublisherRole",
+          "Arn"
+        ]
+      }
+    },
+    "IngressOpsFailureQueueArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "IngressOpsFailures",
+          "Arn"
+        ]
+      }
+    },
+    "IngressOpsFailureQueueUrl": {
+      "Value": {
+        "Ref": "IngressOpsFailures"
+      }
+    },
+    "OpsEventBridgeRuleArns": {
+      "Value": {
+        "Fn::Join": [
+          ",",
+          [
+            {
+              "Fn::GetAtt": [
+                "PublicationRule",
+                "Arn"
+              ]
+            },
+            {
+              "Fn::GetAtt": [
+                "ServiceSignalRule",
+                "Arn"
+              ]
+            },
+            {
+              "Fn::GetAtt": [
+                "TerminalRule",
+                "Arn"
+              ]
+            },
+            {
+              "Fn::GetAtt": [
+                "ReconcileSchedule",
+                "Arn"
+              ]
+            },
+            {
+              "Fn::GetAtt": [
+                "IngressOpsRule",
+                "Arn"
+              ]
+            }
+          ]
+        ]
+      }
+    }
+  }
+}

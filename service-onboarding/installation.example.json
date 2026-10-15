@@ -1,0 +1,9 @@
+{
+  "schema_version": "1.0",
+  "installation_id": "company-security-prod",
+  "environment": "prod",
+  "discovery": {"scope": "tagged", "regions": ["ap-northeast-2", "us-east-1"], "exclude_tags": {"security:exclude": "true"}},
+  "response_mode": "observe",
+  "allowed_actions": ["monitor", "block_ip"],
+  "principal_scopes": []
+}

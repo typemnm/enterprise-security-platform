@@ -1,0 +1,1323 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Deploy per resource region; forward verified WAF observations to the central control plane.",
+  "Parameters": {
+    "CodeBucket": {
+      "Type": "String"
+    },
+    "CodeKey": {
+      "Type": "String"
+    },
+    "RegistryTableName": {
+      "Type": "String"
+    },
+    "RegistryTableArn": {
+      "Type": "String"
+    },
+    "ExpectedActivityTableName": {
+      "Type": "String"
+    },
+    "ExpectedActivityTableArn": {
+      "Type": "String"
+    },
+    "CasesTableName": {
+      "Type": "String"
+    },
+    "CasesTableArn": {
+      "Type": "String"
+    },
+    "SecurityEventBusArn": {
+      "Type": "String"
+    },
+    "AuditBucketName": {
+      "Type": "String"
+    },
+    "AuditBucketArn": {
+      "Type": "String"
+    },
+    "AuditKeyArn": {
+      "Type": "String"
+    },
+    "ControlPlaneRegion": {
+      "Type": "String"
+    },
+    "LeaseTableName": {
+      "Type": "String"
+    },
+    "LeaseTableArn": {
+      "Type": "String"
+    },
+    "InstallationId": {
+      "Type": "String"
+    },
+    "CodeVersion": {
+      "Type": "String",
+      "Default": ""
+    },
+    "Environment": {
+      "Type": "String",
+      "Default": "prod"
+    },
+    "LogRetentionDays": {
+      "Type": "Number",
+      "Default": 90,
+      "AllowedValues": [
+        30,
+        60,
+        90,
+        180,
+        365
+      ]
+    }
+  },
+  "Conditions": {
+    "VersionPinned": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "CodeVersion"
+            },
+            ""
+          ]
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "SecurityLogIngressLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/enterprise/security/${AWS::StackName}/ingress"
+        },
+        "RetentionInDays": {
+          "Ref": "LogRetentionDays"
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "SecurityLogIngressRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "sts:AssumeRole",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "SecurityLogIngressFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Runtime": "python3.13",
+        "Handler": "runtime.ingest.handler",
+        "Timeout": 300,
+        "MemorySize": 256,
+        "Role": {
+          "Fn::GetAtt": [
+            "SecurityLogIngressRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "S3Bucket": {
+            "Ref": "CodeBucket"
+          },
+          "S3Key": {
+            "Ref": "CodeKey"
+          },
+          "S3ObjectVersion": {
+            "Fn::If": [
+              "VersionPinned",
+              {
+                "Ref": "CodeVersion"
+              },
+              {
+                "Ref": "AWS::NoValue"
+              }
+            ]
+          }
+        },
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "SecurityLogIngressLogs"
+          },
+          "LogFormat": "JSON"
+        },
+        "Environment": {
+          "Variables": {
+            "EXPECTED_ACCOUNT": {
+              "Ref": "AWS::AccountId"
+            },
+            "CONTROL_PLANE_REGION": {
+              "Ref": "ControlPlaneRegion"
+            },
+            "REGISTRY_TABLE": {
+              "Ref": "RegistryTableName"
+            },
+            "EXPECTED_ACTIVITY_TABLE": {
+              "Ref": "ExpectedActivityTableName"
+            },
+            "CASES_TABLE": {
+              "Ref": "CasesTableName"
+            },
+            "ENVIRONMENT": {
+              "Ref": "Environment"
+            },
+            "INSTALLATION_ID": {
+              "Ref": "InstallationId"
+            },
+            "LEASE_TABLE": {
+              "Ref": "LeaseTableName"
+            },
+            "EVENT_BUS_ARN": {
+              "Ref": "SecurityEventBusArn"
+            },
+            "AUDIT_BUCKET": {
+              "Ref": "AuditBucketName"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "SecurityLogIngressPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "SecurityLogIngressFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "logs.amazonaws.com",
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
+        },
+        "SourceArn": {
+          "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws-waf-logs-*"
+        }
+      }
+    },
+    "CaseBudgetLogMetric": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "SecurityLogIngressLogs"
+        },
+        "FilterPattern": "{ $.budget_limited > 0 && $.installation_id = * && $.environment = * }",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": "EnterpriseSecurity/Operations",
+            "MetricName": "CaseBudgetLimitedLog",
+            "MetricValue": "$.budget_limited",
+            "Unit": "Count",
+            "Dimensions": [
+              {
+                "Key": "InstallationId",
+                "Value": "$.installation_id"
+              },
+              {
+                "Key": "Environment",
+                "Value": "$.environment"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "SecurityLogIngressSdkPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "VerifiedLogIngressSdk",
+        "Roles": [
+          {
+            "Ref": "SecurityLogIngressRole"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": {
+                "Fn::Sub": "${SecurityLogIngressLogs.Arn}:*"
+              },
+              "Condition": {
+                "ArnEquals": {
+                  "lambda:SourceFunctionArn": {
+                    "Fn::GetAtt": [
+                      "SecurityLogIngressFunction",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": "dynamodb:GetItem",
+              "Resource": [
+                {
+                  "Ref": "RegistryTableArn"
+                },
+                {
+                  "Ref": "ExpectedActivityTableArn"
+                }
+              ],
+              "Condition": {
+                "ArnEquals": {
+                  "lambda:SourceFunctionArn": {
+                    "Fn::GetAtt": [
+                      "SecurityLogIngressFunction",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": "dynamodb:Query",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    {
+                      "Ref": "RegistryTableArn"
+                    },
+                    "/index/WebAclArnIndex"
+                  ]
+                ]
+              },
+              "Condition": {
+                "ArnEquals": {
+                  "lambda:SourceFunctionArn": {
+                    "Fn::GetAtt": [
+                      "SecurityLogIngressFunction",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "dynamodb:GetItem",
+                "dynamodb:BatchGetItem",
+                "dynamodb:PutItem",
+                "dynamodb:UpdateItem"
+              ],
+              "Resource": {
+                "Ref": "LeaseTableArn"
+              },
+              "Condition": {
+                "ArnEquals": {
+                  "lambda:SourceFunctionArn": {
+                    "Fn::GetAtt": [
+                      "SecurityLogIngressFunction",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "dynamodb:GetItem",
+                "dynamodb:PutItem",
+                "dynamodb:UpdateItem"
+              ],
+              "Resource": {
+                "Ref": "CasesTableArn"
+              },
+              "Condition": {
+                "ArnEquals": {
+                  "lambda:SourceFunctionArn": {
+                    "Fn::GetAtt": [
+                      "SecurityLogIngressFunction",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": "events:PutEvents",
+              "Resource": {
+                "Ref": "SecurityEventBusArn"
+              },
+              "Condition": {
+                "ArnEquals": {
+                  "lambda:SourceFunctionArn": {
+                    "Fn::GetAtt": [
+                      "SecurityLogIngressFunction",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": "cloudwatch:PutMetricData",
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "cloudwatch:namespace": "EnterpriseSecurity/Operations",
+                  "aws:RequestedRegion": {
+                    "Ref": "ControlPlaneRegion"
+                  }
+                },
+                "ArnEquals": {
+                  "lambda:SourceFunctionArn": {
+                    "Fn::GetAtt": [
+                      "SecurityLogIngressFunction",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    {
+                      "Ref": "AuditBucketArn"
+                    },
+                    "/ingestion/*"
+                  ]
+                ]
+              },
+              "Condition": {
+                "ArnEquals": {
+                  "lambda:SourceFunctionArn": {
+                    "Fn::GetAtt": [
+                      "SecurityLogIngressFunction",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "kms:GenerateDataKey",
+                "kms:Decrypt"
+              ],
+              "Resource": {
+                "Ref": "AuditKeyArn"
+              },
+              "Condition": {
+                "ArnEquals": {
+                  "lambda:SourceFunctionArn": {
+                    "Fn::GetAtt": [
+                      "SecurityLogIngressFunction",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": "logs:FilterLogEvents",
+              "Resource": {
+                "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws-waf-logs-*"
+              },
+              "Condition": {
+                "ArnEquals": {
+                  "lambda:SourceFunctionArn": {
+                    "Fn::GetAtt": [
+                      "SecurityLogIngressFunction",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "SecurityLogIngressFailureQueue": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "SqsManagedSseEnabled": true,
+        "MaximumMessageSize": 1048576,
+        "MessageRetentionPeriod": 1209600,
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          },
+          {
+            "Key": "FailurePath",
+            "Value": "log-ingress-async"
+          }
+        ]
+      }
+    },
+    "SecurityLogIngressFailureQueuePolicy": {
+      "Type": "AWS::SQS::QueuePolicy",
+      "Properties": {
+        "Queues": [
+          {
+            "Ref": "SecurityLogIngressFailureQueue"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "sqs:*",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "SecurityLogIngressFailureQueue",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "SecurityLogIngressFailureDeliveryPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "LogIngressFailureDelivery",
+        "Roles": [
+          {
+            "Ref": "SecurityLogIngressRole"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "sqs:SendMessage",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "SecurityLogIngressFailureQueue",
+                  "Arn"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "SecurityLogIngressAsyncFailure": {
+      "Type": "AWS::Lambda::EventInvokeConfig",
+      "DependsOn": [
+        "SecurityLogIngressFailureDeliveryPolicy",
+        "SecurityLogIngressFailureQueuePolicy"
+      ],
+      "Properties": {
+        "FunctionName": {
+          "Ref": "SecurityLogIngressFunction"
+        },
+        "Qualifier": "$LATEST",
+        "MaximumRetryAttempts": 2,
+        "MaximumEventAgeInSeconds": 3600,
+        "DestinationConfig": {
+          "OnFailure": {
+            "Destination": {
+              "Fn::GetAtt": [
+                "SecurityLogIngressFailureQueue",
+                "Arn"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "IngressAlarmRelayKey": {
+      "Type": "AWS::KMS::Key",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "EnableKeyRotation": true,
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ],
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "kms:*",
+              "Resource": "*",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:root"
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": "*",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                },
+                "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        {
+                          "Fn::Sub": "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/"
+                        },
+                        {
+                          "Fn::Join": [
+                            "",
+                            [
+                              {
+                                "Ref": "InstallationId"
+                              },
+                              {
+                                "Fn::Sub": "-${AWS::Region}-ingress-relay"
+                              }
+                            ]
+                          ]
+                        }
+                      ]
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "IngressAlarmRelayFailureQueue": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "QueueName": {
+          "Fn::Join": [
+            "",
+            [
+              {
+                "Ref": "InstallationId"
+              },
+              {
+                "Fn::Sub": "-${AWS::Region}-ingress-relay-failures"
+              }
+            ]
+          ]
+        },
+        "KmsMasterKeyId": {
+          "Fn::GetAtt": [
+            "IngressAlarmRelayKey",
+            "Arn"
+          ]
+        },
+        "MaximumMessageSize": 1048576,
+        "MessageRetentionPeriod": 1209600,
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          },
+          {
+            "Key": "FailurePath",
+            "Value": "regional-alarm-relay"
+          }
+        ]
+      }
+    },
+    "IngressAlarmRelayFailureQueuePolicy": {
+      "Type": "AWS::SQS::QueuePolicy",
+      "Properties": {
+        "Queues": [
+          {
+            "Ref": "IngressAlarmRelayFailureQueue"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "sqs:*",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "IngressAlarmRelayFailureQueue",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": "sqs:SendMessage",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "IngressAlarmRelayFailureQueue",
+                  "Arn"
+                ]
+              },
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                },
+                "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        {
+                          "Fn::Sub": "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/"
+                        },
+                        {
+                          "Fn::Join": [
+                            "",
+                            [
+                              {
+                                "Ref": "InstallationId"
+                              },
+                              {
+                                "Fn::Sub": "-${AWS::Region}-ingress-relay"
+                              }
+                            ]
+                          ]
+                        }
+                      ]
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "IngressAlarmRelayRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "sts:AssumeRole",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                },
+                "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        {
+                          "Fn::Sub": "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/"
+                        },
+                        {
+                          "Fn::Join": [
+                            "",
+                            [
+                              {
+                                "Ref": "InstallationId"
+                              },
+                              {
+                                "Fn::Sub": "-${AWS::Region}-ingress-relay"
+                              }
+                            ]
+                          ]
+                        }
+                      ]
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "OwnIngressAlarmsToCentralBus",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "events:PutEvents",
+                  "Resource": {
+                    "Ref": "SecurityEventBusArn"
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "events:source": "aws.cloudwatch",
+                      "events:detail-type": "CloudWatch Alarm State Change",
+                      "aws:RequestedRegion": {
+                        "Ref": "ControlPlaneRegion"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "IngressErrorsAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Join": [
+            "",
+            [
+              {
+                "Ref": "InstallationId"
+              },
+              {
+                "Fn::Sub": "-${AWS::Region}-log-ingress-errors"
+              }
+            ]
+          ]
+        },
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ],
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Errors",
+        "Statistic": "Sum",
+        "Period": 60,
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "SecurityLogIngressFunction"
+            }
+          }
+        ]
+      }
+    },
+    "IngressAsyncDroppedAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Join": [
+            "",
+            [
+              {
+                "Ref": "InstallationId"
+              },
+              {
+                "Fn::Sub": "-${AWS::Region}-log-ingress-async-dropped"
+              }
+            ]
+          ]
+        },
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ],
+        "Namespace": "AWS/Lambda",
+        "MetricName": "AsyncEventsDropped",
+        "Statistic": "Sum",
+        "Period": 60,
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "SecurityLogIngressFunction"
+            }
+          }
+        ]
+      }
+    },
+    "IngressDestinationFailuresAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Join": [
+            "",
+            [
+              {
+                "Ref": "InstallationId"
+              },
+              {
+                "Fn::Sub": "-${AWS::Region}-log-ingress-destination-failures"
+              }
+            ]
+          ]
+        },
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ],
+        "Namespace": "AWS/Lambda",
+        "MetricName": "DestinationDeliveryFailures",
+        "Statistic": "Sum",
+        "Period": 60,
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "SecurityLogIngressFunction"
+            }
+          }
+        ]
+      }
+    },
+    "IngressDlqDepthAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Join": [
+            "",
+            [
+              {
+                "Ref": "InstallationId"
+              },
+              {
+                "Fn::Sub": "-${AWS::Region}-log-ingress-dlq-depth"
+              }
+            ]
+          ]
+        },
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:control-plane",
+            "Value": "true"
+          }
+        ],
+        "Metrics": [
+          {
+            "Id": "depth",
+            "Expression": "SUM(METRICS())",
+            "ReturnData": true
+          },
+          {
+            "Id": "queue0",
+            "ReturnData": false,
+            "MetricStat": {
+              "Period": 60,
+              "Stat": "Maximum",
+              "Metric": {
+                "Namespace": "AWS/SQS",
+                "MetricName": "ApproximateNumberOfMessagesVisible",
+                "Dimensions": [
+                  {
+                    "Name": "QueueName",
+                    "Value": {
+                      "Fn::GetAtt": [
+                        "SecurityLogIngressFailureQueue",
+                        "QueueName"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "Id": "queue1",
+            "ReturnData": false,
+            "MetricStat": {
+              "Period": 60,
+              "Stat": "Maximum",
+              "Metric": {
+                "Namespace": "AWS/SQS",
+                "MetricName": "ApproximateNumberOfMessagesVisible",
+                "Dimensions": [
+                  {
+                    "Name": "QueueName",
+                    "Value": {
+                      "Fn::GetAtt": [
+                        "IngressAlarmRelayFailureQueue",
+                        "QueueName"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "Id": "relay0",
+            "ReturnData": false,
+            "MetricStat": {
+              "Period": 60,
+              "Stat": "Sum",
+              "Metric": {
+                "Namespace": "AWS/Events",
+                "MetricName": "FailedInvocations",
+                "Dimensions": [
+                  {
+                    "Name": "RuleName",
+                    "Value": {
+                      "Fn::Join": [
+                        "",
+                        [
+                          {
+                            "Ref": "InstallationId"
+                          },
+                          {
+                            "Fn::Sub": "-${AWS::Region}-ingress-relay"
+                          }
+                        ]
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "Id": "relay1",
+            "ReturnData": false,
+            "MetricStat": {
+              "Period": 60,
+              "Stat": "Sum",
+              "Metric": {
+                "Namespace": "AWS/Events",
+                "MetricName": "InvocationsFailedToBeSentToDlq",
+                "Dimensions": [
+                  {
+                    "Name": "RuleName",
+                    "Value": {
+                      "Fn::Join": [
+                        "",
+                        [
+                          {
+                            "Ref": "InstallationId"
+                          },
+                          {
+                            "Fn::Sub": "-${AWS::Region}-ingress-relay"
+                          }
+                        ]
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "IngressAlarmStateChangeRelay": {
+      "Type": "AWS::Events::Rule",
+      "DependsOn": [
+        "IngressAlarmRelayFailureQueuePolicy"
+      ],
+      "Properties": {
+        "Name": {
+          "Fn::Join": [
+            "",
+            [
+              {
+                "Ref": "InstallationId"
+              },
+              {
+                "Fn::Sub": "-${AWS::Region}-ingress-relay"
+              }
+            ]
+          ]
+        },
+        "State": "ENABLED",
+        "EventPattern": {
+          "source": [
+            "aws.cloudwatch"
+          ],
+          "detail-type": [
+            "CloudWatch Alarm State Change"
+          ],
+          "account": [
+            {
+              "Ref": "AWS::AccountId"
+            }
+          ],
+          "region": [
+            {
+              "Ref": "AWS::Region"
+            }
+          ],
+          "detail": {
+            "alarmName": [
+              {
+                "Ref": "IngressErrorsAlarm"
+              },
+              {
+                "Ref": "IngressAsyncDroppedAlarm"
+              },
+              {
+                "Ref": "IngressDestinationFailuresAlarm"
+              },
+              {
+                "Ref": "IngressDlqDepthAlarm"
+              }
+            ],
+            "state": {
+              "value": [
+                "ALARM",
+                "OK",
+                "INSUFFICIENT_DATA"
+              ]
+            }
+          }
+        },
+        "Targets": [
+          {
+            "Id": "CentralOperations",
+            "Arn": {
+              "Ref": "SecurityEventBusArn"
+            },
+            "RoleArn": {
+              "Fn::GetAtt": [
+                "IngressAlarmRelayRole",
+                "Arn"
+              ]
+            },
+            "DeadLetterConfig": {
+              "Arn": {
+                "Fn::GetAtt": [
+                  "IngressAlarmRelayFailureQueue",
+                  "Arn"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "SecurityLogIngressArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "SecurityLogIngressFunction",
+          "Arn"
+        ]
+      }
+    },
+    "SecurityLogIngressFailureQueueUrl": {
+      "Value": {
+        "Ref": "SecurityLogIngressFailureQueue"
+      }
+    },
+    "SecurityLogIngressFailureQueueArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "SecurityLogIngressFailureQueue",
+          "Arn"
+        ]
+      }
+    },
+    "IngressAlarmRelayFailureQueueUrl": {
+      "Value": {
+        "Ref": "IngressAlarmRelayFailureQueue"
+      }
+    }
+  }
+}

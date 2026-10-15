@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:enterprise-security:installation:1.0",
+  "title": "Enterprise security installation: resource discovery, not a manually supplied target ARN",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "installation_id", "environment", "discovery", "response_mode", "allowed_actions"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "installation_id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,30}$", "description": "Maximum 31 characters leaves space for governed Lambda function names."},
+    "environment": {"type": "string", "pattern": "^[a-z][a-z0-9-]{1,15}$"},
+    "account_id": {"type": "string", "pattern": "^[0-9]{12}$"},
+    "dashboard_origin": {"type": "string", "pattern": "^https://[A-Za-z0-9.-]+(?::[0-9]{1,5})?$"},
+    "discovery": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scope", "regions"],
+      "properties": {
+        "scope": {"enum": ["tagged", "all-supported"]},
+        "regions": {"type": "array", "minItems": 1, "maxItems": 25, "uniqueItems": true,
+                    "items": {"type": "string", "pattern": "^[a-z]{2}(?:-[a-z]+)+-[0-9]$"}},
+        "exclude_tags": {"type": "object", "additionalProperties": {"type": "string"},
+                         "default": {"security:exclude": "true"}}
+      }
+    },
+    "response_mode": {"enum": ["observe", "enforce"]},
+    "allowed_actions": {"type": "array", "minItems": 1, "uniqueItems": true,
+                        "items": {"enum": ["monitor", "block_ip"]}},
+    "principal_scopes": {
+      "type": "array", "maxItems": 0, "description": "CloudTrail principal adapter is not installed; only an empty list is supported.", "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["principal_arn", "actions", "resource_arns"],
+        "properties": {
+          "principal_arn": {"type": "string", "pattern": "^arn:aws(?:-us-gov|-cn)?:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+$"},
+          "actions": {"type": "array", "minItems": 1, "uniqueItems": true,
+                      "items": {"enum": ["secretsmanager:GetSecretValue", "secretsmanager:BatchGetSecretValue", "kms:Decrypt"]}},
+          "resource_arns": {"type": "array", "minItems": 1, "uniqueItems": true,
+                            "items": {"type": "string", "pattern": "^arn:[^*?]+$"}},
+          "source_function_arn": {"type": "string", "pattern": "^arn:aws(?:-us-gov|-cn)?:lambda:[a-z0-9-]+:[0-9]{12}:function:[A-Za-z0-9_-]+$"}
+        }
+      }
+    }
+  }
+}

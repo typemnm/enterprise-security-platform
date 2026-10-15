@@ -1,0 +1,29 @@
+{
+  "name": "hitl-dashboard",
+  "version": "1.0.0",
+  "description": "Authenticated HOTL/HITL incident-response dashboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --no-experimental-require-module --test"
+  },
+  "engines": {
+    "node": ">=24.11.0 <25"
+  },
+  "dependencies": {
+    "@aws-sdk/client-lambda": "3.1151.0",
+    "@aws-sdk/client-s3": "3.1151.0",
+    "@aws-sdk/client-sfn": "3.1151.0",
+    "@aws-sdk/client-wafv2": "3.1151.0",
+    "@aws-sdk/client-dynamodb": "3.1151.0",
+    "@aws-sdk/lib-dynamodb": "3.1151.0",
+    "express": "5.3.0",
+    "marked": "18.1.1",
+    "jose": "6.2.12",
+    "sanitize-html": "2.18.0",
+    "@codegenie/serverless-express": "5.0.0",
+    "ipaddr.js": "2.5.0"
+  },
+  "license": "Apache-2.0",
+  "private": true
+}

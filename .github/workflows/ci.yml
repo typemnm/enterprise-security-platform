@@ -1,0 +1,64 @@
+name: Public source and deployment bundle
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      AWS_EC2_METADATA_DISABLED: 'true'
+      PYTHONDONTWRITEBYTECODE: '1'
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+    steps:
+      # Official actions/v6 tag commits verified against upstream repositories.
+      - name: Check out public source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Python 3.13
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - name: Set up Node.js 24 LTS
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Check source upload allowlist and sensitive literals
+        run: python -B tools/publication_check.py --root .
+      - name: Test publication guard
+        run: python -B -m unittest discover -s tools -p 'test_*.py'
+      - name: Install locked runtime SDK and local validation tools
+        run: |
+          python -m pip install --only-binary=:all: --require-hashes -r runtime-requirements.lock.txt
+          python -m pip install --only-binary=:all: jsonschema==4.25.1 cfn-lint==1.57.2
+      - name: Test and build neutral Lambda packages and templates
+        run: python -B build_release.py --build
+      - name: Package company deployment bundle
+        run: python -B tools/pack_release.py
+      - name: Check final upload archive
+        run: python -B tools/publication_check.py --root . --archive dist/enterprise-security-platform-deploy.zip
+      - name: Upload reviewed deployment bundle
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: company-deploy-${{ github.sha }}
+          path: |
+            dist/enterprise-security-platform-deploy.zip
+            dist/enterprise-security-platform-deploy.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+          include-hidden-files: false

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:enterprise-security:service-registry:1.0",
+  "title": "Verified service inventory written by the discovery backend",
+  "type": "object", "additionalProperties": false,
+  "required": ["service_id", "environment", "account_id", "region", "enabled", "response_mode", "waf_ipset_arn", "waf_scope", "web_acl_arn", "resource_arns", "isolation_target_ids", "allowed_actions", "audit_bucket", "revision"],
+  "properties": {
+    "service_id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,47}$"},
+    "environment": {"type": "string", "pattern": "^[a-z][a-z0-9-]{1,15}$"},
+    "account_id": {"type": "string", "pattern": "^[0-9]{12}$"},
+    "region": {"type": "string", "pattern": "^[a-z]{2}(?:-[a-z]+)+-[0-9]$"},
+    "enabled": {"type": "boolean"}, "response_mode": {"enum": ["observe", "enforce"]},
+    "manual_block_enabled": {"type": "boolean", "default": false},
+    "waf_ipset_arn": {"type": ["string", "null"], "pattern": "^arn:aws(?:-us-gov|-cn)?:wafv2:[a-z0-9-]+:[0-9]{12}:(regional|global)/ipset/[^/]+/[0-9a-f-]{36}$"},
+    "waf_ipv6_ipset_arn": {"type": ["string", "null"], "pattern": "^arn:aws(?:-us-gov|-cn)?:wafv2:[a-z0-9-]+:[0-9]{12}:(regional|global)/ipset/[^/]+/[0-9a-f-]{36}$"},
+    "waf_scope": {"enum": ["REGIONAL", "CLOUDFRONT", null]},
+    "web_acl_arn": {"type": ["string", "null"], "pattern": "^arn:aws(?:-us-gov|-cn)?:wafv2:[a-z0-9-]+:[0-9]{12}:(regional|global)/webacl/[^/]+/[0-9a-f-]{36}$"},
+    "resource_arns": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^arn:[^*?]+$"}},
+    "resource_type": {"enum": ["ALB", "CLOUDFRONT"]},
+    "logging_state": {"enum": ["INTEGRATED", "ADAPTER_REQUIRED", "PENDING", "DISABLED"]},
+    "log_group_name": {"type": "string", "pattern": "^aws-waf-logs-[A-Za-z0-9_./#-]+$", "maxLength": 512},
+    "log_region": {"type": "string", "pattern": "^[a-z]{2}(?:-[a-z]+)+-[0-9]$"},
+    "auto_block_policy": {"type": "object", "additionalProperties": false, "required": ["enabled"], "properties": {
+      "enabled": {"type": "boolean", "default": false},
+      "signal_types": {"type": "array", "uniqueItems": true, "minItems": 1, "items": {"const": "WAF_PATTERN"}},
+      "rule_ids": {"type": "array", "uniqueItems": true, "minItems": 1, "maxItems": 100, "items": {"type": "string", "pattern": "^[A-Za-z0-9_:.-]{1,128}$"}},
+      "window_seconds": {"type": "integer", "minimum": 60, "maximum": 3600},
+      "min_requests": {"type": "integer", "minimum": 2, "maximum": 10000}
+    }, "allOf": [{"if": {"properties": {"enabled": {"const": true}}}, "then": {"required": ["signal_types", "rule_ids", "window_seconds", "min_requests"]}}]},
+    "updated_at": {"type": "integer", "minimum": 0},
+    "rate_limit": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "isolation_target_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^i-[0-9a-f]{8,17}$"}},
+    "allowed_actions": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["monitor", "block_ip", "isolate_instance"]}},
+    "nacl_id": {"type": ["string", "null"], "pattern": "^acl-[0-9a-f]{8,17}$"},
+    "nacl_enabled": {"type": "boolean", "default": false},
+    "nacl_slots": {"type": "array", "maxItems": 100, "uniqueItems": true, "items": {"type": "integer", "minimum": 1, "maximum": 32766}},
+    "vpc_id": {"type": "string", "pattern": "^vpc-[0-9a-f]{8,17}$"},
+    "nacl_placeholder_cidr": {"type": "string", "maxLength": 49},
+    "protected_cidrs": {"type": "array", "uniqueItems": true, "items": {"type": "string", "maxLength": 49}},
+    "allowed_admin_groups": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 128}},
+    "allowed_reader_groups": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 128}},
+    "report_bucket": {"type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$"},
+    "audit_bucket": {"type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$"},
+    "revision": {"type": "string", "minLength": 1, "maxLength": 128}
+  },
+  "allOf": [
+    {"if": {"properties": {"response_mode": {"const": "enforce"}}}, "then": {
+      "properties": {"waf_ipset_arn": {"type": "string"}, "web_acl_arn": {"type": "string"}, "waf_scope": {"type": "string"}}}},
+    {"if": {"properties": {"allowed_actions": {"contains": {"const": "isolate_instance"}}}}, "then": {
+      "properties": {"isolation_target_ids": {"minItems": 1}}}},
+    {"if": {"required": ["nacl_enabled"], "properties": {"nacl_enabled": {"const": true}}}, "then": {
+      "required": ["nacl_id", "nacl_slots", "vpc_id", "nacl_placeholder_cidr"],
+      "properties": {"nacl_id": {"type": "string"}, "nacl_slots": {"minItems": 1}}}}
+  ]
+}

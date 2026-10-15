@@ -1,0 +1,331 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Owned REGIONAL WAF bundle. Attach only after ownership/conflict inspection.",
+  "Parameters": {
+    "ServiceId": {
+      "Type": "String",
+      "AllowedPattern": "[a-z][a-z0-9-]{2,47}"
+    },
+    "Environment": {
+      "Type": "String",
+      "Default": "prod",
+      "AllowedPattern": "[a-z][a-z0-9-]{1,15}"
+    },
+    "LogRetentionDays": {
+      "Type": "Number",
+      "Default": 90,
+      "AllowedValues": [
+        30,
+        60,
+        90,
+        180,
+        365
+      ]
+    }
+  },
+  "Resources": {
+    "IPV4BlockSet": {
+      "Type": "AWS::WAFv2::IPSet",
+      "Properties": {
+        "Scope": "REGIONAL",
+        "IPAddressVersion": "IPV4",
+        "Name": {
+          "Fn::Sub": "security-${ServiceId}-${Environment}-blocked-ipv4"
+        },
+        "Addresses": [],
+        "Description": "Enterprise service-scoped response addresses. Registered targets only.",
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:service-id",
+            "Value": {
+              "Ref": "ServiceId"
+            }
+          }
+        ]
+      }
+    },
+    "IPV6BlockSet": {
+      "Type": "AWS::WAFv2::IPSet",
+      "Properties": {
+        "Scope": "REGIONAL",
+        "IPAddressVersion": "IPV6",
+        "Name": {
+          "Fn::Sub": "security-${ServiceId}-${Environment}-blocked-ipv6"
+        },
+        "Addresses": [],
+        "Description": "Enterprise service-scoped response addresses. Registered targets only.",
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:service-id",
+            "Value": {
+              "Ref": "ServiceId"
+            }
+          }
+        ]
+      }
+    },
+    "WebAcl": {
+      "Type": "AWS::WAFv2::WebACL",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "security-${ServiceId}-${Environment}"
+        },
+        "Scope": "REGIONAL",
+        "DefaultAction": {
+          "Allow": {}
+        },
+        "Rules": [
+          {
+            "Name": "EnterpriseIpBlock",
+            "Priority": 0,
+            "Action": {
+              "Block": {}
+            },
+            "Statement": {
+              "OrStatement": {
+                "Statements": [
+                  {
+                    "IPSetReferenceStatement": {
+                      "Arn": {
+                        "Fn::GetAtt": [
+                          "IPV4BlockSet",
+                          "Arn"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "IPSetReferenceStatement": {
+                      "Arn": {
+                        "Fn::GetAtt": [
+                          "IPV6BlockSet",
+                          "Arn"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "VisibilityConfig": {
+              "CloudWatchMetricsEnabled": true,
+              "MetricName": "EnterpriseIpBlock",
+              "SampledRequestsEnabled": false
+            }
+          },
+          {
+            "Name": "AWSManagedRulesCommonRuleSet",
+            "Priority": 10,
+            "OverrideAction": {
+              "Count": {}
+            },
+            "Statement": {
+              "ManagedRuleGroupStatement": {
+                "VendorName": "AWS",
+                "Name": "AWSManagedRulesCommonRuleSet"
+              }
+            },
+            "VisibilityConfig": {
+              "CloudWatchMetricsEnabled": true,
+              "MetricName": "AWSManagedRulesCommonRuleSet",
+              "SampledRequestsEnabled": false
+            }
+          },
+          {
+            "Name": "AWSManagedRulesKnownBadInputsRuleSet",
+            "Priority": 20,
+            "OverrideAction": {
+              "Count": {}
+            },
+            "Statement": {
+              "ManagedRuleGroupStatement": {
+                "VendorName": "AWS",
+                "Name": "AWSManagedRulesKnownBadInputsRuleSet"
+              }
+            },
+            "VisibilityConfig": {
+              "CloudWatchMetricsEnabled": true,
+              "MetricName": "AWSManagedRulesKnownBadInputsRuleSet",
+              "SampledRequestsEnabled": false
+            }
+          }
+        ],
+        "VisibilityConfig": {
+          "CloudWatchMetricsEnabled": true,
+          "MetricName": "EnterpriseSecurity",
+          "SampledRequestsEnabled": false
+        },
+        "DataProtectionConfig": {
+          "DataProtections": [
+            {
+              "Field": {
+                "FieldType": "SINGLE_HEADER",
+                "FieldKeys": [
+                  "authorization",
+                  "cookie",
+                  "x-api-key"
+                ]
+              },
+              "Action": "SUBSTITUTION",
+              "ExcludeRuleMatchDetails": false,
+              "ExcludeRateBasedDetails": false
+            },
+            {
+              "Field": {
+                "FieldType": "QUERY_STRING"
+              },
+              "Action": "SUBSTITUTION",
+              "ExcludeRuleMatchDetails": false,
+              "ExcludeRateBasedDetails": false
+            },
+            {
+              "Field": {
+                "FieldType": "BODY"
+              },
+              "Action": "SUBSTITUTION",
+              "ExcludeRuleMatchDetails": false,
+              "ExcludeRateBasedDetails": false
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:service-id",
+            "Value": {
+              "Ref": "ServiceId"
+            }
+          }
+        ]
+      }
+    },
+    "WafLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "aws-waf-logs-security-${ServiceId}-${Environment}"
+        },
+        "RetentionInDays": {
+          "Ref": "LogRetentionDays"
+        },
+        "Tags": [
+          {
+            "Key": "ManagedBy",
+            "Value": "enterprise-security"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "security:service-id",
+            "Value": {
+              "Ref": "ServiceId"
+            }
+          }
+        ]
+      }
+    },
+    "WafLogging": {
+      "Type": "AWS::WAFv2::LoggingConfiguration",
+      "Properties": {
+        "ResourceArn": {
+          "Fn::GetAtt": [
+            "WebAcl",
+            "Arn"
+          ]
+        },
+        "LogDestinationConfigs": [
+          {
+            "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${WafLogs}"
+          }
+        ],
+        "RedactedFields": [
+          {
+            "SingleHeader": {
+              "Name": "authorization"
+            }
+          },
+          {
+            "SingleHeader": {
+              "Name": "cookie"
+            }
+          },
+          {
+            "SingleHeader": {
+              "Name": "x-api-key"
+            }
+          },
+          {
+            "QueryString": {}
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "WebAclArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "WebAcl",
+          "Arn"
+        ]
+      }
+    },
+    "IPv4BlockSetArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "IPV4BlockSet",
+          "Arn"
+        ]
+      }
+    },
+    "IPv6BlockSetArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "IPV6BlockSet",
+          "Arn"
+        ]
+      }
+    },
+    "WafLogGroupArn": {
+      "Value": {
+        "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${WafLogs}"
+      }
+    },
+    "Scope": {
+      "Value": "REGIONAL"
+    }
+  }
+}
