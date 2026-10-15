@@ -55,6 +55,8 @@ class TerraformPackagingTests(unittest.TestCase):
         self.assertIsNotNone(root_block)
         reviewed = set(re.findall(r'"zh:([a-f0-9]{64})"', root_block[1]))
         self.assertGreater(len(reviewed), 1, "The reviewed root lock must contain official cross-platform archive hashes")
+        reviewed_h1 = set(re.findall(r'"h1:([A-Za-z0-9+/]{43}=)"', root_block[1]))
+        self.assertGreaterEqual(len(reviewed_h1), 2, "The reviewed lock must include unpacked Windows and Linux provider hashes")
         for path in sorted(locks):
             with self.subTest(lock=path.relative_to(ROOT).as_posix()):
                 text = path.read_text(encoding="utf-8")
@@ -64,6 +66,8 @@ class TerraformPackagingTests(unittest.TestCase):
                 self.assertRegex(block[1], r'\bversion\s*=\s*"6\.69\.0"')
                 self.assertEqual(set(re.findall(r'"zh:([a-f0-9]{64})"', block[1])), reviewed,
                                  "Windows-only h1 locks cannot support Linux readonly initialization")
+                self.assertEqual(set(re.findall(r'"h1:([A-Za-z0-9+/]{43}=)"', block[1])), reviewed_h1,
+                                 "Every published lock must retain the reviewed unpacked cross-platform hashes")
 
     def test_changed_module_and_provider_lock_are_rejected_by_bundle_verification(self):
         for name in ["terraform/modules/foundation/main.tf.json", "terraform/.terraform.lock.hcl"]:

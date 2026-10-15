@@ -10,11 +10,15 @@
 
 Terraform validate·plan·apply 성공, 기존 CFN에서의 소유권 이관 성공, 실제 AWS 런타임·HTTP·HOTL/HITL·전달·회사 서비스 인수는 각각 확인합니다. plan은 AWS 조회를 할 수 있고 apply만으로 실제 Slack·WAF 차단이나 사람의 MFA 로그인이 검증되지는 않습니다. 아래 v0.1.0 이력은 Terraform 배포 성공으로 재사용하지 않습니다.
 
-## v0.2.0 Terraform 참조 이관 확인 상태
+## v0.2.0 Terraform 참조 이관 검증
 
 기존 참조 설치를 native Terraform으로 이관해 apply가 **추가 0·in-place 갱신 29·삭제 0**으로 완료됐습니다. 기존 CFN 스택 3개의 live 리소스 185개를 Retain으로 보존한 뒤 stack container를 해제했고, 기존 리소스가 유지됐음을 확인했습니다. 이 수치는 이 참조 환경의 결과이며 회사별 import·리소스 개수를 뜻하지 않습니다. 런타임 기능을 교체하는 이관은 수행하지 않았습니다.
 
-최종 릴리스 재빌드와 대응 metadata 재적용, 이후 no-changes plan·HTTPS 재검증은 별도 마감 항목입니다. 위 native apply 성공만으로 이 최종 검사나 실제 회사 Slack·업무 차단·사람의 MFA 로그인까지 완료됐다고 판단하지 않습니다.
+native apply 후 `terraform plan -detailed-exitcode`가 exit 0·No changes로 끝났습니다. 기존 Lambda 12개의 FunctionArn·CodeSha256·Handler·Runtime·Role, DynamoDB 7개의 TableArn·TableId·키 schema·생성 시점, WAF IPSet 4개의 ID·이름·주소 목록이 이관 전과 같음을 확인했습니다. 이는 실행 코드·데이터 자산·현재 차단 목록의 보존 증거이며 모든 회사 업무 기능의 인수 완료를 뜻하지 않습니다.
+
+실제 Terraform deployment output을 AWS 메타데이터와 대조하는 resolver 경로로 HTTPS 경계 검사 9개가 `HTTP_BOUNDARY_PASSED`로 완료됐습니다. health 200, 로그인 흐름 302, session·승인·반려·직접 차단·롤백의 비로그인 401 거절과 PKCE·cookie 302 경계를 확인했습니다. 이관 후에도 자동 발견 ON·tagged·observe·dry run을 유지했고 선택된 회사 업무 대상은 0개였습니다. 기본 Slack·관리자 계정은 연결하지 않았으며 실제 회사 Slack 수신·관리자 초대·사람의 MFA 로그인·업무 IP 차단/롤백은 별도 회사 인수 항목입니다.
+
+현재 검증 manifest에는 대시보드 46·인프라 34·Python 회귀 238·도구 53, 합계 **371개 로컬 시험 통과**가 기록돼 있습니다. Terraform 모듈 mock과 입력 계약 시험은 실제 AWS 업무 변경 없이 수행합니다. provider 잠금 파일은 공식 Windows/Linux 등의 unpacked `h1`과 archive `zh`를 포함하고 모든 포함 lock의 집합을 대조하며, Linux CI의 readonly init·validate에서도 검증합니다. 최종 릴리스 아티팩트 재빌드·해당 metadata/code pin 재적용과 GitHub CI 결과는 이 런타임 인수 증거와 별도로 확인합니다. 최종 release ID는 이 문서에 고정하지 않습니다.
 
 ## v0.1.0 소스 검증
 
