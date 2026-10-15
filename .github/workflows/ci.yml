@@ -63,7 +63,8 @@ jobs:
           terraform -chdir=terraform fmt -check -recursive
           terraform -chdir=terraform init -backend=false -lockfile=readonly -input=false
           terraform -chdir=terraform validate -no-color
-          terraform -chdir=terraform providers schema -json > "$RUNNER_TEMP/aws-provider-schema.json"
+          terraform -chdir=terraform/modules/foundation init -backend=false -lockfile=readonly -input=false
+          terraform -chdir=terraform/modules/foundation providers schema -json > "$RUNNER_TEMP/aws-provider-schema.json"
           python -B tools/terraform_codegen.py --schema "$RUNNER_TEMP/aws-provider-schema.json" --check
           terraform -chdir=terraform/bootstrap-state init -backend=false -lockfile=readonly -input=false
           terraform -chdir=terraform/bootstrap-state validate -no-color
